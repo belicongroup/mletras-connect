@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -15,6 +15,7 @@ import { AuthHeader } from '../components/AuthHeader';
 import { Button } from '../components/Button';
 import { TextField } from '../components/TextField';
 import { useAuthLanguage } from '../context/AuthLanguageContext';
+import { mapAuthError, sendOtp, verifyOtp } from '../services/authService';
 import { RootStackParamList } from '../types';
 import { colors, layout, spacing, typography } from '../theme';
 
@@ -32,10 +33,19 @@ export function OtpVerificationScreen({ navigation, route }: Props) {
   const [pending, setPending] = useState(true);
   const [resendSeconds, setResendSeconds] = useState(RESEND_COOLDOWN_SECONDS);
 
+  const dispatchOtp = useCallback(async () => {
+    setPending(true);
+    setError('');
+    const result = await sendOtp(email, flow);
+    setPending(false);
+    if (!result.ok) {
+      setError(mapAuthError(result.error, strings));
+    }
+  }, [email, flow, strings]);
+
   useEffect(() => {
-    const timer = setTimeout(() => setPending(false), 1500);
-    return () => clearTimeout(timer);
-  }, []);
+    dispatchOtp();
+  }, [dispatchOtp]);
 
   useEffect(() => {
     if (resendSeconds <= 0) return;
@@ -53,8 +63,13 @@ export function OtpVerificationScreen({ navigation, route }: Props) {
 
     setLoading(true);
     setError('');
-    await new Promise((resolve) => setTimeout(resolve, 800));
+    const result = await verifyOtp(email, code.trim(), flow);
     setLoading(false);
+
+    if (!result.ok) {
+      setError(mapAuthError(result.error, strings));
+      return;
+    }
 
     if (flow === 'reset') {
       navigation.navigate('CreatePassword', { email, flow: 'reset' });
@@ -64,13 +79,11 @@ export function OtpVerificationScreen({ navigation, route }: Props) {
     navigation.navigate('CreatePassword', { email });
   };
 
-  const handleResend = () => {
-    if (resendSeconds > 0) return;
-    setPending(true);
+  const handleResend = async () => {
+    if (resendSeconds > 0 || pending) return;
     setResendSeconds(RESEND_COOLDOWN_SECONDS);
     setCode('');
-    setError('');
-    setTimeout(() => setPending(false), 1500);
+    await dispatchOtp();
   };
 
   return (

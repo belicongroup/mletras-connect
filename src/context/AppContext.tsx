@@ -6,12 +6,10 @@ import React, {
   useMemo,
   useState,
 } from 'react';
+import * as authService from '../services/authService';
 import { addPost as addPostService, getPosts, setPostsStore } from '../services/postsService';
 import { clearSession, getSession, saveSession } from '../services/profileService';
 import {
-  createUser,
-  getUserById,
-  getUserByUsername,
   getUsers,
   updateUser,
 } from '../services/usersService';
@@ -20,6 +18,7 @@ import { Instrument, Post, UserProfile } from '../types';
 interface SignUpInput {
   username: string;
   email?: string;
+  password?: string;
   firstName?: string;
   lastName?: string;
   country: string;
@@ -39,7 +38,7 @@ interface AppContextValue {
   currentUser: UserProfile | null;
   users: Record<string, UserProfile>;
   posts: Post[];
-  signIn: (username: string) => Promise<{ ok: boolean; error?: string }>;
+  signIn: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
   signUp: (input: SignUpInput) => Promise<{ ok: boolean; error?: string }>;
   completeProfileSetup: (input: SignUpInput) => Promise<void>;
   signOut: () => Promise<void>;
@@ -74,11 +73,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setUsers(usersMap);
       setPosts(postsData);
 
-      if (session) {
-        const user = usersMap[session.userId];
-        if (user) {
-          setCurrentUser(user);
+      if (session?.token) {
+        const me = await authService.getCurrentUser();
+        if (me.ok && me.data) {
+          setCurrentUser(me.data);
           setHasCompletedProfile(session.hasCompletedProfile);
+          setUsers((prev) => ({ ...prev, [me.data!.id]: me.data! }));
+        } else {
+          await clearSession();
         }
       }
 
@@ -91,40 +93,52 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const signIn = useCallback(async (username: string) => {
-    const user = await getUserByUsername(username);
-    if (!user) {
-      return { ok: false, error: 'accountNotFound' };
+  const signIn = useCallback(async (email: string, password: string) => {
+    const result = await authService.login(email.trim(), password);
+    if (!result.ok || !result.data) {
+      return { ok: false, error: result.error ?? 'invalidCredentials' };
     }
 
-    setCurrentUser(user);
+    setCurrentUser(result.data.user);
     setHasCompletedProfile(true);
-    setUsers((prev) => ({ ...prev, [user.id]: user }));
-    await saveSession({ userId: user.id, hasCompletedProfile: true });
+    setUsers((prev) => ({ ...prev, [result.data!.user.id]: result.data!.user }));
+    await saveSession({
+      userId: result.data.user.id,
+      token: result.data.token,
+      hasCompletedProfile: true,
+    });
     return { ok: true };
   }, []);
 
   const signUp = useCallback(async (input: SignUpInput) => {
-    const existing = await getUserByUsername(input.username);
-    if (existing) {
-      return { ok: false, error: 'usernameTaken' };
+    if (!input.email || !input.password) {
+      return { ok: false, error: 'unknown' };
     }
 
-    const user = await createUser({
+    const result = await authService.signUp({
+      email: input.email.trim(),
+      password: input.password,
       username: input.username.trim(),
-      email: input.email?.trim() || undefined,
       firstName: input.firstName?.trim() || undefined,
       lastName: input.lastName?.trim() || undefined,
       country: input.country.trim(),
-      city: input.city.trim(),
       state: input.state.trim(),
+      city: input.city.trim(),
       instruments: input.instruments,
     });
 
-    setCurrentUser(user);
+    if (!result.ok || !result.data) {
+      return { ok: false, error: result.error ?? 'unknown' };
+    }
+
+    setCurrentUser(result.data.user);
     setHasCompletedProfile(true);
-    setUsers((prev) => ({ ...prev, [user.id]: user }));
-    await saveSession({ userId: user.id, hasCompletedProfile: true });
+    setUsers((prev) => ({ ...prev, [result.data!.user.id]: result.data!.user }));
+    await saveSession({
+      userId: result.data.user.id,
+      token: result.data.token,
+      hasCompletedProfile: true,
+    });
     return { ok: true };
   }, []);
 
@@ -146,13 +160,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setCurrentUser(updated);
         setUsers((prev) => ({ ...prev, [updated.id]: updated }));
         setHasCompletedProfile(true);
-        await saveSession({ userId: updated.id, hasCompletedProfile: true });
+        const session = await getSession();
+        if (session) {
+          await saveSession({ ...session, hasCompletedProfile: true });
+        }
       }
     },
     [currentUser],
   );
 
   const signOut = useCallback(async () => {
+    await authService.logout();
     setCurrentUser(null);
     setHasCompletedProfile(false);
     await clearSession();

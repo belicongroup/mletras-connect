@@ -5,6 +5,7 @@ const SESSION_KEY = '@mletras_connect_session';
 
 export interface LocalSession {
   userId: string;
+  token: string;
   hasCompletedProfile: boolean;
 }
 
@@ -12,6 +13,11 @@ export async function getSession(): Promise<LocalSession | null> {
   const raw = await AsyncStorage.getItem(SESSION_KEY);
   if (!raw) return null;
   return JSON.parse(raw) as LocalSession;
+}
+
+export async function getToken(): Promise<string | null> {
+  const session = await getSession();
+  return session?.token ?? null;
 }
 
 export async function saveSession(session: LocalSession): Promise<void> {

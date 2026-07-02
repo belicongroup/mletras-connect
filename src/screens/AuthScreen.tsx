@@ -12,8 +12,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AuthHeader } from '../components/AuthHeader';
 import { Button } from '../components/Button';
 import { TextField } from '../components/TextField';
+import { EMAIL_REGEX } from '../constants/auth';
 import { useApp } from '../context/AppContext';
 import { useAuthLanguage } from '../context/AuthLanguageContext';
+import { mapAuthError } from '../services/authService';
 import { RootStackParamList } from '../types';
 import { colors, layout, spacing, typography } from '../theme';
 
@@ -24,6 +26,7 @@ export function AuthScreen({ navigation }: Props) {
   const { signIn } = useApp();
   const { strings } = useAuthLanguage();
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -32,18 +35,20 @@ export function AuthScreen({ navigation }: Props) {
       setError(strings.emailRequired);
       return;
     }
+    if (!password) {
+      setError(strings.passwordRequirementsTitle);
+      return;
+    }
 
     setLoading(true);
     setError('');
-    const result = await signIn(email.trim());
+    const result = await signIn(email.trim(), password);
     setLoading(false);
 
     if (!result.ok) {
-      if (result.error === 'accountNotFound') {
-        setError(strings.accountNotFound);
-      } else {
-        setError(result.error ?? strings.signInFailed);
-      }
+      setError(
+        mapAuthError(result.error as Parameters<typeof mapAuthError>[0], strings),
+      );
     }
   };
 
@@ -70,6 +75,16 @@ export function AuthScreen({ navigation }: Props) {
             textContentType="emailAddress"
             value={email}
             onChangeText={setEmail}
+            containerStyle={styles.fieldWrap}
+          />
+          <TextField
+            label={strings.password}
+            placeholder={strings.passwordPlaceholder}
+            secureTextEntry
+            autoCapitalize="none"
+            autoCorrect={false}
+            value={password}
+            onChangeText={setPassword}
             error={error}
             containerStyle={styles.fieldWrap}
           />

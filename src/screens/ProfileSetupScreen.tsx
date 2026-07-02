@@ -30,6 +30,7 @@ export function ProfileSetupScreen({ route }: Props) {
   const { signUp } = useApp();
   const { strings } = useAuthLanguage();
   const email = route.params?.email ?? '';
+  const password = route.params?.password ?? '';
 
   const [username, setUsername] = useState('');
   const [firstName, setFirstName] = useState('');
@@ -61,6 +62,10 @@ export function ProfileSetupScreen({ route }: Props) {
   };
 
   const handleSubmit = async () => {
+    if (!password) {
+      setError(strings.createAccountFailed);
+      return;
+    }
     if (!username.trim()) {
       setError(strings.usernameRequired);
       return;
@@ -94,6 +99,7 @@ export function ProfileSetupScreen({ route }: Props) {
     const result = await signUp({
       username: username.trim(),
       email,
+      password,
       firstName: firstName.trim() || undefined,
       lastName: lastName.trim() || undefined,
       country: getCountryLabel(country),
@@ -105,7 +111,7 @@ export function ProfileSetupScreen({ route }: Props) {
     setLoading(false);
 
     if (!result.ok) {
-      if (result.error === 'usernameTaken') {
+      if (result.error === 'usernameTaken' || result.error === 'emailTaken') {
         setError(strings.usernameTaken);
       } else {
         setError(result.error ?? strings.createAccountFailed);

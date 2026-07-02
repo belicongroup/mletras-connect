@@ -1,0 +1,23 @@
+name = "mletras-connect-api"
+main = "src/index.ts"
+compatibility_date = "2026-07-02"
+workers_dev = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "mletras-connect-db"
+database_id = "be90d141-80a3-4244-bb8b-5110f95db121"
+
+[[kv_namespaces]]
+binding = "OTP"
+id = "7702d858fe95492595b13de409ec3f5e"
+
+[vars]
+FROM_EMAIL = "MLetras Connect <connect@mletras.com>"
+
+[[routes]]
+pattern = "connect-api.mletras.com"
+custom_domain = true
+
+[observability]
+enabled = true

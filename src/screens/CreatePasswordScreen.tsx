@@ -14,6 +14,7 @@ import { Button } from '../components/Button';
 import { PasswordRequirements } from '../components/PasswordRequirements';
 import { TextField } from '../components/TextField';
 import { useAuthLanguage } from '../context/AuthLanguageContext';
+import { mapAuthError, resetPassword } from '../services/authService';
 import { RootStackParamList } from '../types';
 import { getPasswordChecks, isPasswordValid } from '../utils/password';
 import { colors, layout, spacing, typography } from '../theme';
@@ -27,13 +28,14 @@ export function CreatePasswordScreen({ navigation, route }: Props) {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const checks = useMemo(
     () => getPasswordChecks(password, confirmPassword),
     [password, confirmPassword],
   );
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (!isPasswordValid(checks)) {
       if (!checks.match) {
         setError(strings.passwordMismatch);
@@ -44,6 +46,14 @@ export function CreatePasswordScreen({ navigation, route }: Props) {
     }
 
     if (flow === 'reset') {
+      setLoading(true);
+      setError('');
+      const result = await resetPassword(email, password);
+      setLoading(false);
+      if (!result.ok) {
+        setError(mapAuthError(result.error, strings));
+        return;
+      }
       navigation.popToTop();
       return;
     }
@@ -104,7 +114,7 @@ export function CreatePasswordScreen({ navigation, route }: Props) {
 
           <PasswordRequirements checks={checks} strings={strings} />
 
-          <Button label={strings.next} onPress={handleNext} fullWidth />
+          <Button label={strings.next} onPress={handleNext} loading={loading} fullWidth />
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

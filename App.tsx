@@ -11,7 +11,7 @@ import { RootNavigator } from './src/navigation/RootNavigator';
 import { colors } from './src/theme';
 
 if (Platform.OS === 'web') {
-  patchFlatListProps({ tintColor: colors.primary });
+  patchFlatListProps({ tintColor: colors.textSecondary });
 }
 
 const ioniconsFont =

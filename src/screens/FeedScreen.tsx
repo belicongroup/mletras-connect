@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Animated,
   FlatList,
+  Platform,
   RefreshControl,
   StyleSheet,
   Text,
@@ -33,6 +34,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Feed'>;
 
 const VIDEO_POLL_INTERVAL_MS = 3000;
 const VIDEO_POLL_MAX_ATTEMPTS = 40; // ~2 minutes
+const REFRESH_SPINNER_COLOR = colors.textSecondary;
 
 export function FeedScreen({ navigation }: Props) {
   const {
@@ -297,12 +299,19 @@ export function FeedScreen({ navigation }: Props) {
           renderItem={renderItem}
           contentContainerStyle={posts.length === 0 ? styles.listEmpty : styles.list}
           showsVerticalScrollIndicator={false}
+          {...(Platform.OS === 'web'
+            ? { refreshing: feedRefreshing, onRefresh: handleRefresh }
+            : {})}
           refreshControl={
-            <RefreshControl
-              refreshing={feedRefreshing}
-              onRefresh={handleRefresh}
-              tintColor={colors.primary}
-            />
+            Platform.OS === 'web' ? undefined : (
+              <RefreshControl
+                refreshing={feedRefreshing}
+                onRefresh={handleRefresh}
+                tintColor={REFRESH_SPINNER_COLOR}
+                colors={[REFRESH_SPINNER_COLOR]}
+                progressViewOffset={headerHeight}
+              />
+            )
           }
           onScroll={onScroll}
           scrollEventThrottle={16}
@@ -329,6 +338,14 @@ export function FeedScreen({ navigation }: Props) {
             onNotificationsPress={() => navigation.navigate('Notifications')}
           />
         </Animated.View>
+        {feedRefreshing ? (
+          <View
+            pointerEvents="none"
+            style={[styles.refreshOverlay, { top: Math.max(headerHeight - 28, 0) }]}
+          >
+            <ActivityIndicator size="small" color={REFRESH_SPINNER_COLOR} />
+          </View>
+        ) : null}
         <Fab onPress={() => setComposerOpen(true)} />
       </View>
 
@@ -379,6 +396,15 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 10,
+  },
+  refreshOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    zIndex: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 28,
   },
   list: {
     paddingBottom: 100,

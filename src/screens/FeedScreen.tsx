@@ -17,6 +17,7 @@ import { FeedHeader } from '../components/FeedHeader';
 import { FeedPost } from '../components/FeedPost';
 import { useApp } from '../context/AppContext';
 import { useAuthLanguage } from '../context/AuthLanguageContext';
+import { useCollapsingHeader } from '../hooks/useCollapsingHeader';
 import {
   getMediaStatus,
   uploadImage,
@@ -58,6 +59,11 @@ export function FeedScreen({ navigation }: Props) {
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const slideAnim = useRef(new Animated.Value(-280)).current;
+  const { headerOffset, headerHeight, onHeaderLayout, onScroll } = useCollapsingHeader();
+
+  const handleRefresh = useCallback(() => {
+    void refreshFeed();
+  }, [refreshFeed]);
 
   const canAddMore = pickedMedia.length === 0;
 
@@ -152,7 +158,7 @@ export function FeedScreen({ navigation }: Props) {
         attempts += 1;
         const statuses = await Promise.all(videos.map((v) => getMediaStatus(v.mediaAssetId)));
         if (statuses.every((s) => s?.processingStatus === 'ready')) {
-          refreshFeed();
+          refreshFeed({ silent: true });
           return;
         }
         if (attempts < VIDEO_POLL_MAX_ATTEMPTS) setTimeout(tick, VIDEO_POLL_INTERVAL_MS);
@@ -253,17 +259,16 @@ export function FeedScreen({ navigation }: Props) {
     );
   }, [feedRefreshing, strings.noPostsYet]);
 
+  const renderListHeader = useCallback(() => {
+    if (headerHeight === 0) return null;
+    return <View style={{ height: headerHeight }} />;
+  }, [headerHeight]);
+
   if (!currentUser) return null;
 
   return (
     <View style={styles.container}>
       <View style={styles.inner}>
-        <FeedHeader
-          user={currentUser}
-          unreadCount={unreadCount}
-          onAvatarPress={openDrawer}
-          onNotificationsPress={() => navigation.navigate('Notifications')}
-        />
         <FlatList
           data={posts}
           keyExtractor={keyExtractor}
@@ -273,12 +278,15 @@ export function FeedScreen({ navigation }: Props) {
           refreshControl={
             <RefreshControl
               refreshing={feedRefreshing}
-              onRefresh={refreshFeed}
+              onRefresh={handleRefresh}
               tintColor={colors.primary}
             />
           }
+          onScroll={onScroll}
+          scrollEventThrottle={16}
           onEndReached={feedHasMore ? loadMoreFeed : undefined}
           onEndReachedThreshold={0.5}
+          ListHeaderComponent={renderListHeader}
           ListFooterComponent={renderFooter}
           ListEmptyComponent={renderEmpty}
           initialNumToRender={6}
@@ -286,6 +294,17 @@ export function FeedScreen({ navigation }: Props) {
           windowSize={11}
           removeClippedSubviews
         />
+        <Animated.View
+          style={[styles.headerOverlay, { transform: [{ translateY: headerOffset }] }]}
+          onLayout={onHeaderLayout}
+        >
+          <FeedHeader
+            user={currentUser}
+            unreadCount={unreadCount}
+            onAvatarPress={openDrawer}
+            onNotificationsPress={() => navigation.navigate('Notifications')}
+          />
+        </Animated.View>
         <Fab onPress={() => setComposerOpen(true)} />
       </View>
 
@@ -328,6 +347,13 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     maxWidth: layout.maxContentWidth,
+  },
+  headerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
   },
   list: {
     paddingBottom: 100,

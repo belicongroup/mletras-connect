@@ -22,6 +22,11 @@ import type { LocalSession } from '../services/profileService';
 import { Instrument, Post, UserProfile } from '../types';
 
 const UNREAD_POLL_INTERVAL_MS = 30000;
+const FEED_POLL_INTERVAL_MS = 30000;
+
+interface RefreshFeedOptions {
+  silent?: boolean;
+}
 
 interface SignUpInput {
   username: string;
@@ -55,7 +60,7 @@ interface AppContextValue {
   addPost: (input: CreatePostInput) => Promise<{ ok: boolean; error?: string }>;
   removePost: (postId: string) => Promise<{ ok: boolean; error?: string }>;
   toggleLike: (postId: string) => void;
-  refreshFeed: () => Promise<void>;
+  refreshFeed: (options?: RefreshFeedOptions) => Promise<void>;
   loadMoreFeed: () => Promise<void>;
   unreadCount: number;
   refreshUnreadCount: () => Promise<void>;
@@ -79,6 +84,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [unreadCount, setUnreadCount] = useState(0);
   const cursorRef = useRef<string | null>(null);
   const loadingRef = useRef(false);
+  const feedRefreshInFlight = useRef(false);
 
   const refreshUnreadCount = useCallback(async () => {
     const count = await notificationsService.getUnreadCount();
@@ -107,14 +113,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const refreshFeed = useCallback(async () => {
-    setFeedRefreshing(true);
-    const page = await postsService.getFeed(null);
-    cursorRef.current = page.nextCursor;
-    setFeedHasMore(page.nextCursor !== null);
-    mergeAuthors(page.authors);
-    setPosts(page.posts);
-    setFeedRefreshing(false);
+  const refreshFeed = useCallback(async (options?: RefreshFeedOptions) => {
+    if (feedRefreshInFlight.current) return;
+    feedRefreshInFlight.current = true;
+    const silent = options?.silent ?? false;
+    if (!silent) setFeedRefreshing(true);
+    try {
+      const page = await postsService.getFeed(null);
+      cursorRef.current = page.nextCursor;
+      setFeedHasMore(page.nextCursor !== null);
+      mergeAuthors(page.authors);
+      setPosts(page.posts);
+    } finally {
+      if (!silent) setFeedRefreshing(false);
+      feedRefreshInFlight.current = false;
+    }
   }, [mergeAuthors]);
 
   const loadMoreFeed = useCallback(async () => {
@@ -187,6 +200,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }, UNREAD_POLL_INTERVAL_MS);
     return () => clearInterval(interval);
   }, [currentUser, refreshUnreadCount]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    const interval = setInterval(() => {
+      void refreshFeed({ silent: true });
+    }, FEED_POLL_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [currentUser, refreshFeed]);
 
   const signIn = useCallback(
     async (email: string, password: string) => {

@@ -12,11 +12,20 @@ import {
 } from '../lib/otp';
 import { hashPassword, verifyPassword } from '../lib/password';
 import { enforceRateLimit, getClientIp } from '../lib/rateLimit';
-import { serializeUser, type UserRow } from '../lib/user';
+import { normalizeUsername, serializeUser, type UserRow } from '../lib/user';
 
 export type { Env };
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Relaxed while onboarding / QA — tighten before public launch. */
+const AUTH_RL_WINDOW_SECONDS = 900;
+const OTP_SEND_IP_LIMIT = 200;
+const OTP_SEND_EMAIL_LIMIT = 100;
+const OTP_VERIFY_IP_LIMIT = 200;
+const SIGNUP_IP_LIMIT = 100;
+const LOGIN_IP_LIMIT = 200;
+const LOGIN_EMAIL_LIMIT = 100;
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -49,9 +58,10 @@ export async function handleAuthRequest(
     }
 
     const ip = getClientIp(request);
-    const ipLimited = await enforceRateLimit(request, env.OTP, `otp:ip:${ip}`, 20, 900);
+    const skipRl = env.ENABLE_TEST_ROUTES === 'true';
+    const ipLimited = await enforceRateLimit(request, env.OTP, `otp:ip:${ip}`, OTP_SEND_IP_LIMIT, AUTH_RL_WINDOW_SECONDS, skipRl);
     if (ipLimited) return ipLimited;
-    const emailLimited = await enforceRateLimit(request, env.OTP, `otp:email:${email}`, 5, 900);
+    const emailLimited = await enforceRateLimit(request, env.OTP, `otp:email:${email}`, OTP_SEND_EMAIL_LIMIT, AUTH_RL_WINDOW_SECONDS, skipRl);
     if (emailLimited) return emailLimited;
 
     if (flow === 'signup') {
@@ -73,9 +83,12 @@ export async function handleAuthRequest(
     const code = generateOtpCode();
     await storeOtp(env.OTP, flow, email, code);
 
-    const sent = await sendOtpEmail(env.RESEND_API_KEY, env.FROM_EMAIL, email, code, flow);
-    if (!sent.ok) {
-      return errorResponse(request, sent.error, 502);
+    // Skip Resend in test mode; OTP is readable via /__test__/otp/peek.
+    if (env.ENABLE_TEST_ROUTES !== 'true') {
+      const sent = await sendOtpEmail(env.RESEND_API_KEY, env.FROM_EMAIL, email, code, flow);
+      if (!sent.ok) {
+        return errorResponse(request, sent.error, 502);
+      }
     }
 
     return jsonResponse(request, { ok: true });
@@ -98,8 +111,9 @@ export async function handleAuthRequest(
       request,
       env.OTP,
       `otpverify:ip:${getClientIp(request)}`,
-      30,
-      900,
+      OTP_VERIFY_IP_LIMIT,
+      AUTH_RL_WINDOW_SECONDS,
+      env.ENABLE_TEST_ROUTES === 'true',
     );
     if (verifyLimited) return verifyLimited;
 
@@ -126,14 +140,15 @@ export async function handleAuthRequest(
 
     const email = body?.email ? normalizeEmail(body.email) : '';
     const password = body?.password ?? '';
-    const username = body?.username?.trim() ?? '';
+    const username = body?.username ? normalizeUsername(body.username) : '';
 
     const signupLimited = await enforceRateLimit(
       request,
       env.OTP,
       `signup:ip:${getClientIp(request)}`,
-      10,
+      SIGNUP_IP_LIMIT,
       3600,
+      env.ENABLE_TEST_ROUTES === 'true',
     );
     if (signupLimited) return signupLimited;
 
@@ -240,9 +255,10 @@ export async function handleAuthRequest(
     }
 
     const ip = getClientIp(request);
-    const ipLimited = await enforceRateLimit(request, env.OTP, `login:ip:${ip}`, 30, 900);
+    const skipRl = env.ENABLE_TEST_ROUTES === 'true';
+    const ipLimited = await enforceRateLimit(request, env.OTP, `login:ip:${ip}`, LOGIN_IP_LIMIT, AUTH_RL_WINDOW_SECONDS, skipRl);
     if (ipLimited) return ipLimited;
-    const emailLimited = await enforceRateLimit(request, env.OTP, `login:email:${email}`, 10, 900);
+    const emailLimited = await enforceRateLimit(request, env.OTP, `login:email:${email}`, LOGIN_EMAIL_LIMIT, AUTH_RL_WINDOW_SECONDS, skipRl);
     if (emailLimited) return emailLimited;
 
     const row = await env.DB.prepare('SELECT * FROM users WHERE email = ?')

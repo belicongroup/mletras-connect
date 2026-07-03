@@ -20,6 +20,7 @@ import {
 } from '../services/profileService';
 import type { LocalSession } from '../services/profileService';
 import { Instrument, Post, UserProfile } from '../types';
+import { normalizeUsername } from '../utils/format';
 
 const UNREAD_POLL_INTERVAL_MS = 30000;
 const FEED_POLL_INTERVAL_MS = 30000;
@@ -241,7 +242,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const result = await authService.signUp({
         email: input.email.trim(),
         password: input.password,
-        username: input.username.trim(),
+      username: normalizeUsername(input.username),
         firstName: input.firstName?.trim() || undefined,
         lastName: input.lastName?.trim() || undefined,
         country: input.country.trim(),

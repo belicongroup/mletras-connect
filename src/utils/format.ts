@@ -1,3 +1,8 @@
+/** Matches API: usernames are stored lowercase for case-insensitive uniqueness. */
+export function normalizeUsername(value: string): string {
+  return value.trim().toLowerCase();
+}
+
 export function formatRelativeTime(isoDate: string): string {
   const diffSec = Math.floor((Date.now() - new Date(isoDate).getTime()) / 1000);
   if (diffSec < 60) return 'now';

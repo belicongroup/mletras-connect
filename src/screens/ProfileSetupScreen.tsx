@@ -21,6 +21,7 @@ import {
 import { useApp } from '../context/AppContext';
 import { useAuthLanguage } from '../context/AuthLanguageContext';
 import { Instrument, RootStackParamList } from '../types';
+import { normalizeUsername } from '../utils/format';
 import { colors, layout, spacing, typography } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ProfileSetup'>;
@@ -97,7 +98,7 @@ export function ProfileSetupScreen({ route }: Props) {
     const resolvedCity = isOtherCountry ? customCity.trim() : cityCode;
 
     const result = await signUp({
-      username: username.trim(),
+      username: normalizeUsername(username),
       email,
       password,
       firstName: firstName.trim() || undefined,
@@ -142,7 +143,7 @@ export function ProfileSetupScreen({ route }: Props) {
           autoCapitalize="none"
           autoCorrect={false}
           value={username}
-          onChangeText={setUsername}
+          onChangeText={(value) => setUsername(normalizeUsername(value))}
           hint={strings.usernamePermanentNote}
         />
 

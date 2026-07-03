@@ -1,3 +1,8 @@
+/** Usernames are stored lowercase so uniqueness is case-insensitive. */
+export function normalizeUsername(value: string): string {
+  return value.trim().toLowerCase();
+}
+
 export interface UserRow {
   id: string;
   email: string;

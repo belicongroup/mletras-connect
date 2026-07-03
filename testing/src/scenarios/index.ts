@@ -60,6 +60,35 @@ export async function runAuthScenario(
     shared.users.set(signup.data.user.id, { token: signup.data.token, email, password });
   }
 
+  // Case-variant username rejected for a different email
+  const caseEmail = uniqueEmail('auth-case', Date.now() % 10000);
+  const caseSend = await client.post('/auth/otp/send', { email: caseEmail, flow: 'signup' }, false);
+  assertOkResponse(collector, 'OTP send for case-variant username test', caseSend);
+  const casePeek = await client.peekOtp(caseEmail, 'signup');
+  const caseCode = casePeek.data?.pending?.code;
+  if (!caseCode) {
+    collector.fail('OTP peek for case-variant username test', 'auth', 'critical', casePeek.durationMs, 'No OTP');
+  } else {
+    const caseVerify = await client.post(
+      '/auth/otp/verify',
+      { email: caseEmail, code: caseCode, flow: 'signup' },
+      false,
+    );
+    assertOkResponse(collector, 'OTP verify for case-variant username test', caseVerify);
+    const caseSignup = await client.post(
+      '/auth/signup',
+      {
+        email: caseEmail,
+        password,
+        username: username.toUpperCase(),
+        ...LOCATION,
+        instruments: INSTRUMENTS,
+      },
+      false,
+    );
+    assertErrorResponse(collector, 'Case-variant username rejected', caseSignup, 400, 'usernameTaken');
+  }
+
   // Duplicate signup — email already registered
   const dupSend = await client.post('/auth/otp/send', { email, flow: 'signup' }, false);
   assertErrorResponse(collector, 'OTP send for taken email rejected', dupSend, 400, 'emailTaken');

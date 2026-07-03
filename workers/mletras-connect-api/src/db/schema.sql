@@ -2,7 +2,7 @@ CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
   email TEXT NOT NULL UNIQUE,
   password_hash TEXT NOT NULL,
-  username TEXT NOT NULL UNIQUE,
+  username TEXT NOT NULL UNIQUE, -- stored lowercase; uniqueness is case-insensitive
   first_name TEXT,
   last_name TEXT,
   country TEXT NOT NULL,

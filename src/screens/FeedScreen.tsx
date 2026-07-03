@@ -27,6 +27,7 @@ import {
 import { Post, RootStackParamList } from '../types';
 import { colors, layout, spacing, typography } from '../theme';
 import { showAlert } from '../utils/alert';
+import { generateVideoThumbnailUri } from '../utils/videoThumbnail';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Feed'>;
 
@@ -103,8 +104,14 @@ export function FeedScreen({ navigation }: Props) {
 
       const asset = result.assets[0];
       if (!asset) return;
+
+      let thumbnailUri: string | undefined;
+      if (kind === 'video') {
+        thumbnailUri = (await generateVideoThumbnailUri(asset.uri)) ?? undefined;
+      }
+
       setPickedMedia([
-        { uri: asset.uri, kind, width: asset.width, height: asset.height },
+        { uri: asset.uri, kind, width: asset.width, height: asset.height, thumbnailUri },
       ]);
     },
     [pickedMedia],

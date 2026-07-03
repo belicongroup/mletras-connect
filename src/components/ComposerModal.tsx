@@ -20,6 +20,7 @@ export interface PickedMedia {
   kind: 'image' | 'video';
   width?: number;
   height?: number;
+  thumbnailUri?: string;
 }
 
 interface ComposerModalProps {
@@ -92,8 +93,21 @@ function ComposerModalComponent({
                 {media.map((item, index) => (
                   <View key={`${item.uri}-${index}`} style={styles.thumbWrap}>
                     {item.kind === 'video' ? (
-                      <View style={[styles.thumb, styles.videoThumb]}>
-                        <Ionicons name="videocam" size={22} color={colors.text} />
+                      <View style={styles.thumb}>
+                        {item.thumbnailUri ? (
+                          <Image
+                            style={styles.thumbImage}
+                            source={{ uri: item.thumbnailUri }}
+                            contentFit="cover"
+                          />
+                        ) : (
+                          <View style={[styles.thumbImage, styles.videoThumb]}>
+                            <Ionicons name="videocam" size={22} color={colors.text} />
+                          </View>
+                        )}
+                        <View pointerEvents="none" style={styles.playBadge}>
+                          <Ionicons name="play" size={14} color="#FFFFFF" />
+                        </View>
                       </View>
                     ) : (
                       <Image style={styles.thumb} source={{ uri: item.uri }} contentFit="cover" />
@@ -223,8 +237,24 @@ const styles = StyleSheet.create({
     height: 96,
     borderRadius: 12,
     backgroundColor: colors.placeholder,
+    overflow: 'hidden',
+  },
+  thumbImage: {
+    width: '100%',
+    height: '100%',
   },
   videoThumb: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  playBadge: {
+    position: 'absolute',
+    left: 6,
+    bottom: 6,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -43,8 +43,31 @@ export interface Comment {
   id: string;
   postId: string;
   authorId: string;
+  parentId: string | null;
   text: string;
   createdAt: string;
+  author: UserProfile;
+  replies?: Comment[];
+}
+
+export type NotificationType = 'comment_on_post' | 'reply_in_thread';
+
+export interface NotificationActor {
+  id: string;
+  username: string;
+  firstName?: string;
+  lastName?: string;
+}
+
+export interface AppNotification {
+  id: string;
+  type: NotificationType;
+  postId?: string;
+  commentId?: string;
+  read: boolean;
+  createdAt: string;
+  actor: NotificationActor;
+  postPreview?: string;
 }
 
 export type RootStackParamList = {
@@ -59,4 +82,5 @@ export type RootStackParamList = {
   EditProfile: undefined;
   Settings: undefined;
   Notifications: undefined;
+  CommentThread: { postId: string };
 };

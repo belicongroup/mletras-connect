@@ -14,10 +14,15 @@ import { getDisplayName, getLocation } from '../utils/format';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Profile'>;
 
-export function ProfileScreen(_props: Props) {
+export function ProfileScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const { currentUser } = useApp();
   const { strings } = useAuthLanguage();
+
+  const handleComment = useCallback(
+    (postId: string) => navigation.navigate('CommentThread', { postId }),
+    [navigation],
+  );
 
   const [userPosts, setUserPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
@@ -85,7 +90,12 @@ export function ProfileScreen(_props: Props) {
           data={userPosts}
           keyExtractor={(item: Post) => item.id}
           renderItem={({ item }) => (
-            <FeedPost post={item} author={currentUser} onLike={handleToggleLike} />
+            <FeedPost
+              post={item}
+              author={currentUser}
+              onLike={handleToggleLike}
+              onComment={handleComment}
+            />
           )}
           ListEmptyComponent={
             loading ? (

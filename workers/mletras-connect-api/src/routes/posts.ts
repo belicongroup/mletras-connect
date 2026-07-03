@@ -274,6 +274,24 @@ export async function handlePostsRequest(
     const [postId, action] = rest.split('/');
     if (!postId) return null;
 
+    if (!action && request.method === 'GET') {
+      const auth = await requireAuth(request, env);
+      if (auth instanceof Response) return auth;
+
+      const row = await env.DB.prepare(
+        `SELECT ${FEED_COLUMNS}
+         FROM posts p JOIN users u ON u.id = p.author_id
+         WHERE p.id = ? AND p.deleted_at IS NULL`,
+      )
+        .bind(postId)
+        .first<PostRow>();
+
+      if (!row) return errorResponse(request, 'notFound', 404);
+
+      const [post] = await hydratePosts(env, [row], auth.payload.sub);
+      return jsonResponse(request, { ok: true, post });
+    }
+
     if (!action && request.method === 'DELETE') {
       const auth = await requireAuth(request, env);
       if (auth instanceof Response) return auth;

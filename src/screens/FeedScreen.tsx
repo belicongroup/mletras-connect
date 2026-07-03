@@ -41,6 +41,7 @@ export function FeedScreen({ navigation }: Props) {
     feedHasMore,
     refreshFeed,
     loadMoreFeed,
+    unreadCount,
   } = useApp();
   const { strings } = useAuthLanguage();
 
@@ -110,13 +111,20 @@ export function FeedScreen({ navigation }: Props) {
     await signOut();
   }, [signOut]);
 
+  const handleComment = useCallback(
+    (postId: string) => navigation.navigate('CommentThread', { postId }),
+    [navigation],
+  );
+
   const renderItem = useCallback(
     ({ item }: { item: Post }) => {
       const author = users[item.authorId];
       if (!author) return null;
-      return <FeedPost post={item} author={author} onLike={toggleLike} />;
+      return (
+        <FeedPost post={item} author={author} onLike={toggleLike} onComment={handleComment} />
+      );
     },
-    [toggleLike, users],
+    [handleComment, toggleLike, users],
   );
 
   const keyExtractor = useCallback((item: Post) => item.id, []);
@@ -146,7 +154,7 @@ export function FeedScreen({ navigation }: Props) {
       <View style={styles.inner}>
         <FeedHeader
           user={currentUser}
-          unreadCount={0}
+          unreadCount={unreadCount}
           onAvatarPress={openDrawer}
           onNotificationsPress={() => navigation.navigate('Notifications')}
         />

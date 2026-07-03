@@ -74,6 +74,13 @@ export type AuthStrings = {
   settings: string;
   notifications: string;
   noNotificationsYet: string;
+  comments: string;
+  commentPlaceholder: string;
+  reply: string;
+  send: string;
+  noCommentsYet: string;
+  commentedOnYourPost: string;
+  repliedInThread: string;
   signOut: string;
   saveChanges: string;
   memberSince: string;
@@ -160,6 +167,13 @@ const en: AuthStrings = {
   settings: 'Settings',
   notifications: 'Notifications',
   noNotificationsYet: "You're all caught up.",
+  comments: 'Comments',
+  commentPlaceholder: 'Add a comment…',
+  reply: 'Reply',
+  send: 'Send',
+  noCommentsYet: 'No comments yet. Be the first.',
+  commentedOnYourPost: 'commented on your post',
+  repliedInThread: 'also replied',
   signOut: 'Sign Out',
   saveChanges: 'Save changes',
   memberSince: 'Member since',
@@ -247,6 +261,13 @@ const es: AuthStrings = {
   settings: 'Configuración',
   notifications: 'Notificaciones',
   noNotificationsYet: 'Estás al día.',
+  comments: 'Comentarios',
+  commentPlaceholder: 'Añade un comentario…',
+  reply: 'Responder',
+  send: 'Enviar',
+  noCommentsYet: 'Aún no hay comentarios. Sé el primero.',
+  commentedOnYourPost: 'comentó tu publicación',
+  repliedInThread: 'también respondió',
   signOut: 'Cerrar sesión',
   saveChanges: 'Guardar cambios',
   memberSince: 'Miembro desde',

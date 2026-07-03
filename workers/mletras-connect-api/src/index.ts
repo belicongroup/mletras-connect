@@ -1,6 +1,8 @@
 import type { Env } from './lib/env';
 import { handleAuthRequest } from './routes/auth';
+import { handleCommentsRequest } from './routes/comments';
 import { handleMediaRequest } from './routes/media';
+import { handleNotificationsRequest } from './routes/notifications';
 import { handlePostsRequest } from './routes/posts';
 import { handleUsersRequest } from './routes/users';
 import { errorResponse, handleOptions, jsonResponse } from './lib/cors';
@@ -28,8 +30,16 @@ export default {
     }
 
     if (path.startsWith('/posts')) {
+      const commentsResponse = await handleCommentsRequest(request, env, path);
+      if (commentsResponse) return commentsResponse;
+
       const postsResponse = await handlePostsRequest(request, env, path);
       if (postsResponse) return postsResponse;
+    }
+
+    if (path.startsWith('/notifications')) {
+      const notificationsResponse = await handleNotificationsRequest(request, env, path);
+      if (notificationsResponse) return notificationsResponse;
     }
 
     if (path.startsWith('/media')) {

@@ -8,10 +8,13 @@ import React, {
   useState,
 } from 'react';
 import * as authService from '../services/authService';
+import * as notificationsService from '../services/notificationsService';
 import * as postsService from '../services/postsService';
 import type { UploadedMedia } from '../services/postsService';
 import { clearSession, getSession, saveSession } from '../services/profileService';
 import { Instrument, Post, UserProfile } from '../types';
+
+const UNREAD_POLL_INTERVAL_MS = 30000;
 
 interface SignUpInput {
   username: string;
@@ -46,6 +49,10 @@ interface AppContextValue {
   toggleLike: (postId: string) => void;
   refreshFeed: () => Promise<void>;
   loadMoreFeed: () => Promise<void>;
+  unreadCount: number;
+  refreshUnreadCount: () => Promise<void>;
+  markAllNotificationsRead: () => Promise<void>;
+  incrementCommentCount: (postId: string) => void;
   hasCompletedProfile: boolean;
 }
 
@@ -61,8 +68,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [feedRefreshing, setFeedRefreshing] = useState(false);
   const [feedLoadingMore, setFeedLoadingMore] = useState(false);
   const [feedHasMore, setFeedHasMore] = useState(true);
+  const [unreadCount, setUnreadCount] = useState(0);
   const cursorRef = useRef<string | null>(null);
   const loadingRef = useRef(false);
+
+  const refreshUnreadCount = useCallback(async () => {
+    const count = await notificationsService.getUnreadCount();
+    setUnreadCount(count);
+  }, []);
+
+  const markAllNotificationsRead = useCallback(async () => {
+    setUnreadCount(0);
+    await notificationsService.markAllRead();
+  }, []);
+
+  const incrementCommentCount = useCallback((postId: string) => {
+    setPosts((prev) =>
+      prev.map((post) =>
+        post.id === postId ? { ...post, commentsCount: post.commentsCount + 1 } : post,
+      ),
+    );
+  }, []);
 
   const mergeAuthors = useCallback((authors: UserProfile[]) => {
     if (authors.length === 0) return;
@@ -118,6 +144,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           setHasCompletedProfile(session.hasCompletedProfile);
           setUsers({ [me.data.id]: me.data });
           await refreshFeed();
+          void refreshUnreadCount();
         } else {
           await clearSession();
         }
@@ -130,7 +157,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return () => {
       mounted = false;
     };
-  }, [refreshFeed]);
+  }, [refreshFeed, refreshUnreadCount]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    const interval = setInterval(() => {
+      void refreshUnreadCount();
+    }, UNREAD_POLL_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [currentUser, refreshUnreadCount]);
 
   const signIn = useCallback(
     async (email: string, password: string) => {
@@ -148,9 +183,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         hasCompletedProfile: true,
       });
       await refreshFeed();
+      void refreshUnreadCount();
       return { ok: true };
     },
-    [refreshFeed],
+    [refreshFeed, refreshUnreadCount],
   );
 
   const signUp = useCallback(
@@ -195,6 +231,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setHasCompletedProfile(false);
     setUsers({});
     setPosts([]);
+    setUnreadCount(0);
     cursorRef.current = null;
     setFeedHasMore(true);
     await clearSession();
@@ -309,6 +346,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       toggleLike,
       refreshFeed,
       loadMoreFeed,
+      unreadCount,
+      refreshUnreadCount,
+      markAllNotificationsRead,
+      incrementCommentCount,
       hasCompletedProfile,
     }),
     [
@@ -327,6 +368,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       toggleLike,
       refreshFeed,
       loadMoreFeed,
+      unreadCount,
+      refreshUnreadCount,
+      markAllNotificationsRead,
+      incrementCommentCount,
       hasCompletedProfile,
     ],
   );

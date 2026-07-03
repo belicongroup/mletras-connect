@@ -11,10 +11,12 @@ interface FeedPostProps {
   post: Post;
   author: UserProfile;
   onLike: (postId: string) => void;
+  onComment?: (postId: string) => void;
 }
 
-function FeedPostComponent({ post, author, onLike }: FeedPostProps) {
+function FeedPostComponent({ post, author, onLike, onComment }: FeedPostProps) {
   const handleLike = useCallback(() => onLike(post.id), [onLike, post.id]);
+  const handleComment = useCallback(() => onComment?.(post.id), [onComment, post.id]);
 
   return (
     <View style={styles.container}>
@@ -58,6 +60,7 @@ function FeedPostComponent({ post, author, onLike }: FeedPostProps) {
 
             <Pressable
               accessibilityRole="button"
+              onPress={handleComment}
               style={({ pressed }) => [styles.action, pressed && styles.pressed]}
             >
               <Ionicons name="chatbubble-outline" size={18} color={colors.textSecondary} />

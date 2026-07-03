@@ -5,6 +5,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useApp } from '../context/AppContext';
 import { AuthScreen } from '../screens/AuthScreen';
 import { CreatePasswordScreen } from '../screens/CreatePasswordScreen';
+import { CommentThreadScreen } from '../screens/CommentThreadScreen';
 import { EditProfileScreen } from '../screens/EditProfileScreen';
 import { ForgotPasswordScreen } from '../screens/ForgotPasswordScreen';
 import { FeedScreen } from '../screens/FeedScreen';
@@ -58,6 +59,7 @@ export function RootNavigator() {
             <Stack.Screen name="EditProfile" component={EditProfileScreen} />
             <Stack.Screen name="Settings" component={SettingsScreen} />
             <Stack.Screen name="Notifications" component={NotificationsScreen} />
+            <Stack.Screen name="CommentThread" component={CommentThreadScreen} />
           </>
         ) : (
           <>

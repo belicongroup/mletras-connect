@@ -103,6 +103,13 @@ export async function getMyPosts(cursor?: string | null, limit = 20): Promise<Fe
   return { posts, authors, nextCursor: result.data.nextCursor };
 }
 
+export async function getPost(postId: string): Promise<{ post: Post; author: UserProfile } | null> {
+  const result = await requestJson<{ post: ApiPost }>(`/posts/${postId}`, { method: 'GET' });
+  if (!result.ok || !result.data) return null;
+  const { author, ...post } = result.data.post;
+  return { post, author };
+}
+
 export async function createPost(input: {
   text: string;
   media?: UploadedMedia[];

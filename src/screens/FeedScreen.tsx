@@ -1,7 +1,6 @@
 import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   FlatList,
   RefreshControl,
@@ -26,6 +25,7 @@ import {
 } from '../services/mediaService';
 import { Post, RootStackParamList } from '../types';
 import { colors, layout, spacing, typography } from '../theme';
+import { showAlert } from '../utils/alert';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Feed'>;
 
@@ -55,6 +55,7 @@ export function FeedScreen({ navigation }: Props) {
   const [pickedMedia, setPickedMedia] = useState<PickedMedia[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const slideAnim = useRef(new Animated.Value(-280)).current;
 
   const canAddMore = pickedMedia.length === 0;
@@ -75,6 +76,7 @@ export function FeedScreen({ navigation }: Props) {
     setComposerText('');
     setPickedMedia([]);
     setUploadProgress(null);
+    setSubmitError(null);
   }, []);
 
   const handleAddMedia = useCallback(async () => {
@@ -90,26 +92,14 @@ export function FeedScreen({ navigation }: Props) {
     });
     if (result.canceled) return;
 
-    const selectedVideo = result.assets.find((a) => a.type === 'video');
-    if (selectedVideo) {
-      // Keep composition simple: a post is either photos or a single video.
-      if (pickedMedia.length > 0 || result.assets.length > 1) {
-        Alert.alert('One at a time', 'Choose photos or a single video, not both.');
-        return;
-      }
+    const asset = result.assets[0];
+    if (!asset) return;
+    if (asset.type === 'video') {
       setPickedMedia([
-        {
-          uri: selectedVideo.uri,
-          kind: 'video',
-          width: selectedVideo.width,
-          height: selectedVideo.height,
-        },
+        { uri: asset.uri, kind: 'video', width: asset.width, height: asset.height },
       ]);
       return;
     }
-
-    const asset = result.assets[0];
-    if (!asset || asset.type === 'video') return;
     setPickedMedia([{ uri: asset.uri, kind: 'image', width: asset.width, height: asset.height }]);
   }, [pickedMedia]);
 
@@ -175,6 +165,7 @@ export function FeedScreen({ navigation }: Props) {
     if ((!composerText.trim() && pickedMedia.length === 0) || submitting) return;
 
     setSubmitting(true);
+    setSubmitError(null);
     let uploaded: UploadedMedia[] = [];
     if (pickedMedia.length > 0) {
       setUploadProgress(0);
@@ -182,7 +173,9 @@ export function FeedScreen({ navigation }: Props) {
       if (!result) {
         setSubmitting(false);
         setUploadProgress(null);
-        Alert.alert('Upload failed', 'Some media could not be uploaded. Please try again.');
+        const message = 'Your photo could not be uploaded. Please try again.';
+        setSubmitError(message);
+        showAlert('Upload failed', message);
         return;
       }
       uploaded = result;
@@ -196,7 +189,9 @@ export function FeedScreen({ navigation }: Props) {
       pollVideos(uploaded);
       closeComposer();
     } else {
-      Alert.alert('Post failed', 'Your post could not be published. Please try again.');
+      const message = 'Your post could not be published. Please try again.';
+      setSubmitError(message);
+      showAlert('Post failed', message);
     }
   }, [addPost, closeComposer, composerText, pickedMedia, pollVideos, submitting, uploadAll]);
 
@@ -293,6 +288,7 @@ export function FeedScreen({ navigation }: Props) {
         media={pickedMedia}
         submitting={submitting}
         uploadProgress={uploadProgress}
+        submitError={submitError}
         canAddMore={canAddMore}
         onChangeText={setComposerText}
         onAddMedia={handleAddMedia}

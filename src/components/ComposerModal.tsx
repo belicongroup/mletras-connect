@@ -29,6 +29,7 @@ interface ComposerModalProps {
   submitting: boolean;
   /** 0..1 aggregate upload progress, or null when not uploading. */
   uploadProgress: number | null;
+  submitError?: string | null;
   canAddMore: boolean;
   onChangeText: (text: string) => void;
   onAddMedia: () => void;
@@ -43,6 +44,7 @@ function ComposerModalComponent({
   media,
   submitting,
   uploadProgress,
+  submitError,
   canAddMore,
   onChangeText,
   onAddMedia,
@@ -107,6 +109,8 @@ function ComposerModalComponent({
                 ))}
               </ScrollView>
             ) : null}
+
+            {submitError ? <Text style={styles.errorText}>{submitError}</Text> : null}
 
             {submitting && uploadProgress !== null ? (
               <View style={styles.progressWrap}>
@@ -229,6 +233,11 @@ const styles = StyleSheet.create({
   progressLabel: {
     ...typography.small,
     color: colors.textSecondary,
+  },
+  errorText: {
+    ...typography.small,
+    color: colors.danger,
+    marginTop: spacing.md,
   },
   toolbar: {
     flexDirection: 'row',

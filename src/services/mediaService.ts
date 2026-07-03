@@ -1,4 +1,5 @@
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
+import { Platform } from 'react-native';
 import { API_URL } from '../config/api';
 import { getToken } from './profileService';
 import type { ImageVariantUrls, PostMedia } from '../types';
@@ -136,31 +137,50 @@ export async function uploadImage(
   sourceHeight?: number,
 ): Promise<UploadedMedia | null> {
   try {
-    const processed = await preprocessImage(uri, sourceWidth, sourceHeight);
-    const fileResponse = await fetch(processed.uri);
-    const blob = await fileResponse.blob();
+    let blob: Blob;
+    let lqip: string | undefined;
+    let contentType = 'image/jpeg';
+
+    if (Platform.OS === 'web') {
+      // ImageManipulator is unreliable on web; upload the picked file directly.
+      const fileResponse = await fetch(uri);
+      blob = await fileResponse.blob();
+      if (blob.type.startsWith('image/')) contentType = blob.type.split(';')[0];
+    } else {
+      const processed = await preprocessImage(uri, sourceWidth, sourceHeight);
+      const fileResponse = await fetch(processed.uri);
+      blob = await fileResponse.blob();
+      lqip = processed.lqip;
+    }
 
     const headers: Record<string, string> = {
       ...(await authHeader()),
-      'Content-Type': 'image/jpeg',
+      'Content-Type': contentType,
     };
-    if (processed.lqip) headers['X-Media-Lqip'] = processed.lqip;
+    if (lqip) headers['X-Media-Lqip'] = lqip;
 
     const result = await withRetry(
       () => xhrUpload(`${API_URL}/media/upload`, 'POST', blob, headers, onProgress),
       (r) => r.status >= 500 || r.status === 0,
     );
-    if (!result || result.status < 200 || result.status >= 300) return null;
+    if (!result || result.status < 200 || result.status >= 300) {
+      console.error('uploadImage failed', result?.status, result?.body?.slice(0, 200));
+      return null;
+    }
 
     const body = JSON.parse(result.body) as {
       ok?: boolean;
       media?: PostMedia & { mediaAssetId?: string };
     };
-    if (!body.ok || !body.media?.mediaAssetId) return null;
+    if (!body.ok || !body.media?.mediaAssetId) {
+      console.error('uploadImage bad response', body);
+      return null;
+    }
 
     const { mediaAssetId, ...media } = body.media;
     return { mediaAssetId, type: 'image', media };
-  } catch {
+  } catch (error) {
+    console.error('uploadImage error', error);
     return null;
   }
 }

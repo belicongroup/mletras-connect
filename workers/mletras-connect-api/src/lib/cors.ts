@@ -12,7 +12,7 @@ export function corsHeaders(request: Request): HeadersInit {
   return {
     'Access-Control-Allow-Origin': allowed,
     'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Media-Lqip',
     'Access-Control-Max-Age': '86400',
   };
 }

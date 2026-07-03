@@ -12,6 +12,10 @@ database_id = "be90d141-80a3-4244-bb8b-5110f95db121"
 binding = "OTP"
 id = "7702d858fe95492595b13de409ec3f5e"
 
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "mletras-connect-media"
+
 [vars]
 FROM_EMAIL = "MLetras Connect <connect@mletras.com>"
 

@@ -8,6 +8,7 @@ import { CreatePasswordScreen } from '../screens/CreatePasswordScreen';
 import { EditProfileScreen } from '../screens/EditProfileScreen';
 import { ForgotPasswordScreen } from '../screens/ForgotPasswordScreen';
 import { FeedScreen } from '../screens/FeedScreen';
+import { NotificationsScreen } from '../screens/NotificationsScreen';
 import { OtpVerificationScreen } from '../screens/OtpVerificationScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import { ProfileSetupScreen } from '../screens/ProfileSetupScreen';
@@ -56,6 +57,7 @@ export function RootNavigator() {
             <Stack.Screen name="Profile" component={ProfileScreen} />
             <Stack.Screen name="EditProfile" component={EditProfileScreen} />
             <Stack.Screen name="Settings" component={SettingsScreen} />
+            <Stack.Screen name="Notifications" component={NotificationsScreen} />
           </>
         ) : (
           <>

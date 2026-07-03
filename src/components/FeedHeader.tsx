@@ -2,15 +2,23 @@ import React, { memo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '../components/Avatar';
+import { NotificationBell } from '../components/NotificationBell';
 import { colors, layout, spacing, typography } from '../theme';
 import { UserProfile } from '../types';
 
 interface FeedHeaderProps {
   user: UserProfile;
+  unreadCount: number;
   onAvatarPress: () => void;
+  onNotificationsPress: () => void;
 }
 
-function FeedHeaderComponent({ user, onAvatarPress }: FeedHeaderProps) {
+function FeedHeaderComponent({
+  user,
+  unreadCount,
+  onAvatarPress,
+  onNotificationsPress,
+}: FeedHeaderProps) {
   const insets = useSafeAreaInsets();
 
   return (
@@ -24,7 +32,7 @@ function FeedHeaderComponent({ user, onAvatarPress }: FeedHeaderProps) {
         <Avatar user={user} size={layout.avatarSm} />
       </Pressable>
       <Text style={styles.title}>MLetras Connect</Text>
-      <View style={styles.spacer} />
+      <NotificationBell unreadCount={unreadCount} onPress={onNotificationsPress} />
     </View>
   );
 }
@@ -46,8 +54,5 @@ const styles = StyleSheet.create({
     color: colors.text,
     flex: 1,
     textAlign: 'center',
-  },
-  spacer: {
-    width: layout.avatarSm,
   },
 });

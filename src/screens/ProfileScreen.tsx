@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '../components/Avatar';
@@ -7,6 +7,7 @@ import { FeedPost } from '../components/FeedPost';
 import { useApp } from '../context/AppContext';
 import { useAuthLanguage } from '../context/AuthLanguageContext';
 import { buildProfileSummary } from '../services/profileService';
+import { getMyPosts, likePost, unlikePost } from '../services/postsService';
 import { Post, RootStackParamList } from '../types';
 import { colors, layout, spacing, typography } from '../theme';
 import { getDisplayName, getLocation } from '../utils/format';
@@ -15,13 +16,48 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Profile'>;
 
 export function ProfileScreen(_props: Props) {
   const insets = useSafeAreaInsets();
-  const { currentUser, posts, toggleLike } = useApp();
+  const { currentUser } = useApp();
   const { strings } = useAuthLanguage();
 
-  const userPosts = useMemo(
-    () => (currentUser ? posts.filter((p) => p.authorId === currentUser.id) : []),
-    [currentUser, posts],
-  );
+  const [userPosts, setUserPosts] = useState<Post[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const page = await getMyPosts(null);
+      if (!mounted) return;
+      setUserPosts(page.posts);
+      setLoading(false);
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const handleToggleLike = useCallback((postId: string) => {
+    setUserPosts((prev) => {
+      const target = prev.find((p) => p.id === postId);
+      if (!target) return prev;
+      const nextLiked = !target.isLiked;
+      const action = nextLiked ? likePost : unlikePost;
+      action(postId).then((result) => {
+        if (!result) return;
+        setUserPosts((cur) =>
+          cur.map((p) =>
+            p.id === postId
+              ? { ...p, isLiked: result.isLiked, likesCount: result.likesCount }
+              : p,
+          ),
+        );
+      });
+      return prev.map((p) =>
+        p.id === postId
+          ? { ...p, isLiked: nextLiked, likesCount: p.likesCount + (nextLiked ? 1 : -1) }
+          : p,
+      );
+    });
+  }, []);
 
   if (!currentUser) return null;
 
@@ -49,9 +85,15 @@ export function ProfileScreen(_props: Props) {
           data={userPosts}
           keyExtractor={(item: Post) => item.id}
           renderItem={({ item }) => (
-            <FeedPost post={item} author={currentUser} onLike={toggleLike} />
+            <FeedPost post={item} author={currentUser} onLike={handleToggleLike} />
           )}
-          ListEmptyComponent={<Text style={styles.empty}>{strings.noPostsYet}</Text>}
+          ListEmptyComponent={
+            loading ? (
+              <ActivityIndicator style={styles.loading} color={colors.primary} />
+            ) : (
+              <Text style={styles.empty}>{strings.noPostsYet}</Text>
+            )
+          }
         />
       </View>
     </View>
@@ -110,6 +152,9 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textSecondary,
     textAlign: 'center',
+    padding: spacing.xxl,
+  },
+  loading: {
     padding: spacing.xxl,
   },
 });

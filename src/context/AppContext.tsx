@@ -4,10 +4,12 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import * as authService from '../services/authService';
-import { addPost as addPostService } from '../services/postsService';
+import * as postsService from '../services/postsService';
+import type { UploadedMedia } from '../services/postsService';
 import { clearSession, getSession, saveSession } from '../services/profileService';
 import { Instrument, Post, UserProfile } from '../types';
 
@@ -25,8 +27,7 @@ interface SignUpInput {
 
 interface CreatePostInput {
   text: string;
-  imageUrl?: string;
-  videoUrl?: string;
+  media?: UploadedMedia[];
 }
 
 interface AppContextValue {
@@ -34,12 +35,17 @@ interface AppContextValue {
   currentUser: UserProfile | null;
   users: Record<string, UserProfile>;
   posts: Post[];
+  feedRefreshing: boolean;
+  feedLoadingMore: boolean;
+  feedHasMore: boolean;
   signIn: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
   signUp: (input: SignUpInput) => Promise<{ ok: boolean; error?: string }>;
   signOut: () => Promise<void>;
   updateProfile: (data: Partial<SignUpInput>) => Promise<{ ok: boolean; error?: string }>;
-  addPost: (input: CreatePostInput) => Promise<void>;
+  addPost: (input: CreatePostInput) => Promise<{ ok: boolean; error?: string }>;
   toggleLike: (postId: string) => void;
+  refreshFeed: () => Promise<void>;
+  loadMoreFeed: () => Promise<void>;
   hasCompletedProfile: boolean;
 }
 
@@ -51,6 +57,50 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [users, setUsers] = useState<Record<string, UserProfile>>({});
   const [posts, setPosts] = useState<Post[]>([]);
   const [hasCompletedProfile, setHasCompletedProfile] = useState(false);
+
+  const [feedRefreshing, setFeedRefreshing] = useState(false);
+  const [feedLoadingMore, setFeedLoadingMore] = useState(false);
+  const [feedHasMore, setFeedHasMore] = useState(true);
+  const cursorRef = useRef<string | null>(null);
+  const loadingRef = useRef(false);
+
+  const mergeAuthors = useCallback((authors: UserProfile[]) => {
+    if (authors.length === 0) return;
+    setUsers((prev) => {
+      const next = { ...prev };
+      for (const author of authors) next[author.id] = author;
+      return next;
+    });
+  }, []);
+
+  const refreshFeed = useCallback(async () => {
+    setFeedRefreshing(true);
+    const page = await postsService.getFeed(null);
+    cursorRef.current = page.nextCursor;
+    setFeedHasMore(page.nextCursor !== null);
+    mergeAuthors(page.authors);
+    setPosts(page.posts);
+    setFeedRefreshing(false);
+  }, [mergeAuthors]);
+
+  const loadMoreFeed = useCallback(async () => {
+    if (loadingRef.current || !cursorRef.current) return;
+    loadingRef.current = true;
+    setFeedLoadingMore(true);
+
+    const page = await postsService.getFeed(cursorRef.current);
+    cursorRef.current = page.nextCursor;
+    setFeedHasMore(page.nextCursor !== null);
+    mergeAuthors(page.authors);
+    setPosts((prev) => {
+      const seen = new Set(prev.map((p) => p.id));
+      const additions = page.posts.filter((p) => !seen.has(p.id));
+      return [...prev, ...additions];
+    });
+
+    setFeedLoadingMore(false);
+    loadingRef.current = false;
+  }, [mergeAuthors]);
 
   useEffect(() => {
     let mounted = true;
@@ -67,68 +117,77 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           setCurrentUser(me.data);
           setHasCompletedProfile(session.hasCompletedProfile);
           setUsers({ [me.data.id]: me.data });
+          await refreshFeed();
         } else {
           await clearSession();
         }
       }
 
-      setIsLoading(false);
+      if (mounted) setIsLoading(false);
     }
 
     bootstrap();
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [refreshFeed]);
 
-  const signIn = useCallback(async (email: string, password: string) => {
-    const result = await authService.login(email.trim(), password);
-    if (!result.ok || !result.data) {
-      return { ok: false, error: result.error ?? 'invalidCredentials' };
-    }
+  const signIn = useCallback(
+    async (email: string, password: string) => {
+      const result = await authService.login(email.trim(), password);
+      if (!result.ok || !result.data) {
+        return { ok: false, error: result.error ?? 'invalidCredentials' };
+      }
 
-    setCurrentUser(result.data.user);
-    setHasCompletedProfile(true);
-    setUsers((prev) => ({ ...prev, [result.data!.user.id]: result.data!.user }));
-    await saveSession({
-      userId: result.data.user.id,
-      token: result.data.token,
-      hasCompletedProfile: true,
-    });
-    return { ok: true };
-  }, []);
+      setCurrentUser(result.data.user);
+      setHasCompletedProfile(true);
+      setUsers((prev) => ({ ...prev, [result.data!.user.id]: result.data!.user }));
+      await saveSession({
+        userId: result.data.user.id,
+        token: result.data.token,
+        hasCompletedProfile: true,
+      });
+      await refreshFeed();
+      return { ok: true };
+    },
+    [refreshFeed],
+  );
 
-  const signUp = useCallback(async (input: SignUpInput) => {
-    if (!input.email || !input.password) {
-      return { ok: false, error: 'unknown' };
-    }
+  const signUp = useCallback(
+    async (input: SignUpInput) => {
+      if (!input.email || !input.password) {
+        return { ok: false, error: 'unknown' };
+      }
 
-    const result = await authService.signUp({
-      email: input.email.trim(),
-      password: input.password,
-      username: input.username.trim(),
-      firstName: input.firstName?.trim() || undefined,
-      lastName: input.lastName?.trim() || undefined,
-      country: input.country.trim(),
-      state: input.state.trim(),
-      city: input.city.trim(),
-      instruments: input.instruments,
-    });
+      const result = await authService.signUp({
+        email: input.email.trim(),
+        password: input.password,
+        username: input.username.trim(),
+        firstName: input.firstName?.trim() || undefined,
+        lastName: input.lastName?.trim() || undefined,
+        country: input.country.trim(),
+        state: input.state.trim(),
+        city: input.city.trim(),
+        instruments: input.instruments,
+      });
 
-    if (!result.ok || !result.data) {
-      return { ok: false, error: result.error ?? 'unknown' };
-    }
+      if (!result.ok || !result.data) {
+        return { ok: false, error: result.error ?? 'unknown' };
+      }
 
-    setCurrentUser(result.data.user);
-    setHasCompletedProfile(true);
-    setUsers((prev) => ({ ...prev, [result.data!.user.id]: result.data!.user }));
-    await saveSession({
-      userId: result.data.user.id,
-      token: result.data.token,
-      hasCompletedProfile: true,
-    });
-    return { ok: true };
-  }, []);
+      setCurrentUser(result.data.user);
+      setHasCompletedProfile(true);
+      setUsers((prev) => ({ ...prev, [result.data!.user.id]: result.data!.user }));
+      await saveSession({
+        userId: result.data.user.id,
+        token: result.data.token,
+        hasCompletedProfile: true,
+      });
+      await refreshFeed();
+      return { ok: true };
+    },
+    [refreshFeed],
+  );
 
   const signOut = useCallback(async () => {
     await authService.logout();
@@ -136,6 +195,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setHasCompletedProfile(false);
     setUsers({});
     setPosts([]);
+    cursorRef.current = null;
+    setFeedHasMore(true);
     await clearSession();
   }, []);
 
@@ -165,33 +226,71 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const addPost = useCallback(
     async (input: CreatePostInput) => {
-      if (!currentUser) return;
+      if (!currentUser) return { ok: false, error: 'unknown' };
 
-      const newPost = await addPostService({
-        authorId: currentUser.id,
+      const created = await postsService.createPost({
         text: input.text.trim(),
-        imageUrl: input.imageUrl,
-        videoUrl: input.videoUrl,
+        media: input.media,
       });
 
-      setPosts((prev) => [newPost, ...prev]);
+      if (!created) return { ok: false, error: 'unknown' };
+
+      setUsers((prev) => ({ ...prev, [created.author.id]: created.author }));
+      setPosts((prev) => [created.post, ...prev]);
+      return { ok: true };
     },
     [currentUser],
   );
 
-  const toggleLike = useCallback((postId: string) => {
-    setPosts((prev) =>
-      prev.map((post) => {
-        if (post.id !== postId) return post;
-        const isLiked = !post.isLiked;
-        return {
-          ...post,
-          isLiked,
-          likesCount: post.likesCount + (isLiked ? 1 : -1),
-        };
-      }),
-    );
-  }, []);
+  const toggleLike = useCallback(
+    (postId: string) => {
+      const target = posts.find((p) => p.id === postId);
+      if (!target) return;
+
+      const nextLiked = !target.isLiked;
+
+      // Optimistic update.
+      setPosts((prev) =>
+        prev.map((post) =>
+          post.id === postId
+            ? {
+                ...post,
+                isLiked: nextLiked,
+                likesCount: post.likesCount + (nextLiked ? 1 : -1),
+              }
+            : post,
+        ),
+      );
+
+      const action = nextLiked ? postsService.likePost : postsService.unlikePost;
+      action(postId).then((result) => {
+        if (!result) {
+          // Roll back on failure.
+          setPosts((prev) =>
+            prev.map((post) =>
+              post.id === postId
+                ? {
+                    ...post,
+                    isLiked: target.isLiked,
+                    likesCount: target.likesCount,
+                  }
+                : post,
+            ),
+          );
+          return;
+        }
+        // Reconcile with server truth.
+        setPosts((prev) =>
+          prev.map((post) =>
+            post.id === postId
+              ? { ...post, isLiked: result.isLiked, likesCount: result.likesCount }
+              : post,
+          ),
+        );
+      });
+    },
+    [posts],
+  );
 
   const value = useMemo(
     () => ({
@@ -199,12 +298,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       currentUser,
       users,
       posts,
+      feedRefreshing,
+      feedLoadingMore,
+      feedHasMore,
       signIn,
       signUp,
       signOut,
       updateProfile,
       addPost,
       toggleLike,
+      refreshFeed,
+      loadMoreFeed,
       hasCompletedProfile,
     }),
     [
@@ -212,12 +316,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       currentUser,
       users,
       posts,
+      feedRefreshing,
+      feedLoadingMore,
+      feedHasMore,
       signIn,
       signUp,
       signOut,
       updateProfile,
       addPost,
       toggleLike,
+      refreshFeed,
+      loadMoreFeed,
       hasCompletedProfile,
     ],
   );

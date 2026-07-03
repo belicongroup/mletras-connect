@@ -1,5 +1,7 @@
 import type { Env } from './lib/env';
 import { handleAuthRequest } from './routes/auth';
+import { handleMediaRequest } from './routes/media';
+import { handlePostsRequest } from './routes/posts';
 import { handleUsersRequest } from './routes/users';
 import { errorResponse, handleOptions, jsonResponse } from './lib/cors';
 
@@ -23,6 +25,16 @@ export default {
     if (path.startsWith('/users')) {
       const usersResponse = await handleUsersRequest(request, env, path);
       if (usersResponse) return usersResponse;
+    }
+
+    if (path.startsWith('/posts')) {
+      const postsResponse = await handlePostsRequest(request, env, path);
+      if (postsResponse) return postsResponse;
+    }
+
+    if (path.startsWith('/media')) {
+      const mediaResponse = await handleMediaRequest(request, env, path);
+      if (mediaResponse) return mediaResponse;
     }
 
     return errorResponse(request, 'notFound', 404);

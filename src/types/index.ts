@@ -33,7 +33,6 @@ export interface Post {
   authorId: string;
   text: string;
   imageUrl?: string;
-  videoUrl?: string;
   createdAt: string;
   likesCount: number;
   commentsCount: number;
@@ -59,4 +58,5 @@ export type RootStackParamList = {
   Profile: undefined;
   EditProfile: undefined;
   Settings: undefined;
+  Notifications: undefined;
 };

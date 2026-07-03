@@ -72,6 +72,8 @@ export type AuthStrings = {
   editProfile: string;
   profile: string;
   settings: string;
+  notifications: string;
+  noNotificationsYet: string;
   signOut: string;
   saveChanges: string;
   memberSince: string;
@@ -156,6 +158,8 @@ const en: AuthStrings = {
   editProfile: 'Edit Profile',
   profile: 'Profile',
   settings: 'Settings',
+  notifications: 'Notifications',
+  noNotificationsYet: "You're all caught up.",
   signOut: 'Sign Out',
   saveChanges: 'Save changes',
   memberSince: 'Member since',
@@ -241,6 +245,8 @@ const es: AuthStrings = {
   editProfile: 'Editar perfil',
   profile: 'Perfil',
   settings: 'Configuración',
+  notifications: 'Notificaciones',
+  noNotificationsYet: 'Estás al día.',
   signOut: 'Cerrar sesión',
   saveChanges: 'Guardar cambios',
   memberSince: 'Miembro desde',

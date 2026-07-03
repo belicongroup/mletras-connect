@@ -8,9 +8,9 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from './Button';
-import { MediaPlaceholder } from './MediaPlaceholder';
 import { colors, spacing, typography } from '../theme';
 
 const MAX_CHARS = 280;
@@ -18,11 +18,11 @@ const MAX_CHARS = 280;
 interface ComposerModalProps {
   visible: boolean;
   text: string;
-  hasImage: boolean;
-  hasVideo: boolean;
+  imageUri: string | null;
+  submitting: boolean;
   onChangeText: (text: string) => void;
-  onToggleImage: () => void;
-  onToggleVideo: () => void;
+  onPickImage: () => void;
+  onRemoveImage: () => void;
   onClose: () => void;
   onSubmit: () => void;
 }
@@ -30,15 +30,15 @@ interface ComposerModalProps {
 function ComposerModalComponent({
   visible,
   text,
-  hasImage,
-  hasVideo,
+  imageUri,
+  submitting,
   onChangeText,
-  onToggleImage,
-  onToggleVideo,
+  onPickImage,
+  onRemoveImage,
   onClose,
   onSubmit,
 }: ComposerModalProps) {
-  const canSubmit = text.trim().length > 0;
+  const canSubmit = (text.trim().length > 0 || imageUri !== null) && !submitting;
   const remaining = MAX_CHARS - text.length;
 
   return (
@@ -53,6 +53,7 @@ function ComposerModalComponent({
               label="Post"
               onPress={onSubmit}
               disabled={!canSubmit}
+              loading={submitting}
               style={styles.postBtn}
             />
           </View>
@@ -69,32 +70,32 @@ function ComposerModalComponent({
               maxLength={MAX_CHARS}
             />
 
-            {hasImage ? <MediaPlaceholder type="image" /> : null}
-            {hasVideo ? <MediaPlaceholder type="video" /> : null}
+            {imageUri ? (
+              <View style={styles.previewWrap}>
+                <Image style={styles.preview} source={{ uri: imageUri }} contentFit="cover" />
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Remove image"
+                  onPress={onRemoveImage}
+                  style={styles.removeBtn}
+                  hitSlop={8}
+                >
+                  <Ionicons name="close" size={18} color={colors.text} />
+                </Pressable>
+              </View>
+            ) : null}
 
             <View style={styles.toolbar}>
               <Pressable
                 accessibilityRole="button"
-                accessibilityState={{ selected: hasImage }}
-                onPress={onToggleImage}
+                accessibilityLabel="Add image"
+                onPress={onPickImage}
                 style={({ pressed }) => [styles.toolBtn, pressed && styles.pressed]}
               >
                 <Ionicons
-                  name={hasImage ? 'image' : 'image-outline'}
+                  name={imageUri ? 'image' : 'image-outline'}
                   size={22}
-                  color={hasImage ? colors.primary : colors.textSecondary}
-                />
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={{ selected: hasVideo }}
-                onPress={onToggleVideo}
-                style={({ pressed }) => [styles.toolBtn, pressed && styles.pressed]}
-              >
-                <Ionicons
-                  name={hasVideo ? 'videocam' : 'videocam-outline'}
-                  size={22}
-                  color={hasVideo ? colors.primary : colors.textSecondary}
+                  color={imageUri ? colors.primary : colors.textSecondary}
                 />
               </Pressable>
               <Text style={[styles.counter, remaining < 20 && styles.counterWarn]}>
@@ -145,6 +146,27 @@ const styles = StyleSheet.create({
     color: colors.text,
     minHeight: 120,
     textAlignVertical: 'top',
+  },
+  previewWrap: {
+    marginTop: spacing.md,
+    position: 'relative',
+  },
+  preview: {
+    width: '100%',
+    aspectRatio: 4 / 3,
+    borderRadius: 16,
+    backgroundColor: colors.placeholder,
+  },
+  removeBtn: {
+    position: 'absolute',
+    top: spacing.sm,
+    right: spacing.sm,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: colors.overlay,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   toolbar: {
     flexDirection: 'row',

@@ -1,8 +1,8 @@
 import React, { memo, useCallback } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from './Avatar';
-import { MediaPlaceholder } from './MediaPlaceholder';
 import { colors, spacing, typography } from '../theme';
 import { Post, UserProfile } from '../types';
 import { formatCount, formatRelativeTime, getLocation } from '../utils/format';
@@ -29,8 +29,14 @@ function FeedPostComponent({ post, author, onLike }: FeedPostProps) {
           <Text style={styles.location}>{getLocation(author.city, author.state)}</Text>
           <Text style={styles.text}>{post.text}</Text>
 
-          {post.imageUrl ? <MediaPlaceholder type="image" /> : null}
-          {post.videoUrl ? <MediaPlaceholder type="video" /> : null}
+          {post.imageUrl ? (
+            <Image
+              style={styles.media}
+              source={{ uri: post.imageUrl }}
+              contentFit="cover"
+              transition={150}
+            />
+          ) : null}
 
           <View style={styles.actions}>
             <Pressable
@@ -108,6 +114,13 @@ const styles = StyleSheet.create({
   text: {
     ...typography.body,
     color: colors.text,
+  },
+  media: {
+    width: '100%',
+    aspectRatio: 4 / 3,
+    borderRadius: 16,
+    marginTop: spacing.md,
+    backgroundColor: colors.placeholder,
   },
   actions: {
     flexDirection: 'row',

@@ -1,11 +1,21 @@
 import { requireAuth, type AuthContext } from '../lib/auth';
 import { errorResponse, jsonResponse } from '../lib/cors';
 import type { Env } from '../lib/env';
+import {
+  deleteProviderAsset,
+  serializePostMedia,
+  type MediaProvider,
+  type PostMediaRow,
+  type SerializedMedia,
+} from '../lib/media';
+import { streamHlsUrl, streamPosterUrl } from '../lib/cfStream';
+import { imageDeliveryUrl } from '../lib/cfImages';
 import { enforceRateLimit } from '../lib/rateLimit';
 
 const MAX_TEXT = 500;
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 50;
+const MAX_IMAGES_PER_POST = 10;
 
 interface PostRow {
   id: string;
@@ -24,11 +34,18 @@ interface PostRow {
   author_created_at: string;
 }
 
-interface MediaRow {
-  post_id: string;
-  type: string;
-  url: string;
-  sort_order: number;
+type MediaRow = PostMediaRow;
+
+interface OwnedAsset {
+  id: string;
+  kind: 'image' | 'video';
+  provider: MediaProvider;
+  provider_id: string;
+  width: number | null;
+  height: number | null;
+  duration_ms: number | null;
+  lqip: string | null;
+  processing_status: 'ready' | 'pending' | 'failed';
 }
 
 async function readJson<T>(request: Request): Promise<T | null> {
@@ -67,12 +84,15 @@ function serializeAuthor(row: PostRow) {
   };
 }
 
-function serializePost(row: PostRow, imageUrl: string | undefined, isLiked: boolean) {
+function serializePost(row: PostRow, media: SerializedMedia[], isLiked: boolean) {
+  // Keep `imageUrl` for older clients: first ready image's medium variant.
+  const firstImage = media.find((m) => m.type === 'image');
   return {
     id: row.id,
     authorId: row.author_id,
     text: row.text,
-    imageUrl,
+    imageUrl: firstImage?.url,
+    media,
     createdAt: row.created_at,
     likesCount: row.likes_count,
     commentsCount: row.comments_count,
@@ -93,7 +113,9 @@ async function hydratePosts(
 
   const [mediaResult, likesResult] = await Promise.all([
     env.DB.prepare(
-      `SELECT post_id, type, url, sort_order FROM post_media
+      `SELECT post_id, type, url, sort_order, provider, provider_id, width, height,
+              duration_ms, poster_url, lqip, processing_status
+       FROM post_media
        WHERE post_id IN (${placeholders}) ORDER BY sort_order ASC`,
     )
       .bind(...ids)
@@ -106,16 +128,111 @@ async function hydratePosts(
       .all<{ post_id: string }>(),
   ]);
 
-  const firstImage = new Map<string, string>();
+  const mediaByPost = new Map<string, SerializedMedia[]>();
   for (const m of mediaResult.results ?? []) {
-    if (m.type === 'image' && !firstImage.has(m.post_id)) {
-      firstImage.set(m.post_id, m.url);
-    }
+    const list = mediaByPost.get(m.post_id) ?? [];
+    list.push(serializePostMedia(env, m));
+    mediaByPost.set(m.post_id, list);
   }
 
   const liked = new Set((likesResult.results ?? []).map((l) => l.post_id));
 
-  return rows.map((row) => serializePost(row, firstImage.get(row.id), liked.has(row.id)));
+  return rows.map((row) =>
+    serializePost(row, mediaByPost.get(row.id) ?? [], liked.has(row.id)),
+  );
+}
+
+/**
+ * Deletes provider-backed media for a post, but only when no other live post
+ * still references the same underlying asset (guards deduped/shared assets).
+ */
+async function cleanupPostMedia(env: Env, postId: string): Promise<void> {
+  const media = await env.DB.prepare(
+    `SELECT provider, provider_id, r2_key FROM post_media WHERE post_id = ?`,
+  )
+    .bind(postId)
+    .all<{ provider: MediaProvider | null; provider_id: string | null; r2_key: string | null }>();
+
+  for (const m of media.results ?? []) {
+    const key = m.provider_id ?? m.r2_key;
+    if (!key) continue;
+    const others = await env.DB.prepare(
+      `SELECT 1 FROM post_media pm
+       JOIN posts p ON p.id = pm.post_id
+       WHERE pm.provider_id = ? AND pm.post_id != ? AND p.deleted_at IS NULL
+       LIMIT 1`,
+    )
+      .bind(key, postId)
+      .first();
+    if (others) continue;
+    await deleteProviderAsset(env, m.provider, m.provider_id, m.r2_key);
+  }
+}
+
+/**
+ * Resolves client-supplied media references to owner-verified assets.
+ *
+ * Preferred path: `mediaAssetId` looked up in `media_assets` and checked against
+ * the caller. Legacy path: `{ key, url }` accepted only when the key sits under
+ * the caller's own `posts/{sub}/` prefix. Enforces per-post media limits.
+ */
+async function resolveOwnedMedia(
+  request: Request,
+  env: Env,
+  ownerId: string,
+  items: Array<{ mediaAssetId?: string; key?: string; url?: string; type?: string }>,
+): Promise<OwnedAsset[] | Response> {
+  const fail = (error: string): Response =>
+    errorResponse(request, error, error === 'forbidden' ? 403 : 400);
+
+  const assetIds = items
+    .map((m) => m.mediaAssetId)
+    .filter((id): id is string => Boolean(id));
+
+  const ownedById = new Map<string, OwnedAsset>();
+  if (assetIds.length > 0) {
+    const placeholders = assetIds.map(() => '?').join(', ');
+    const result = await env.DB.prepare(
+      `SELECT id, kind, provider, provider_id, width, height, duration_ms, lqip, processing_status
+       FROM media_assets WHERE owner_id = ? AND id IN (${placeholders})`,
+    )
+      .bind(ownerId, ...assetIds)
+      .all<OwnedAsset>();
+    for (const asset of result.results ?? []) ownedById.set(asset.id, asset);
+  }
+
+  const resolved: OwnedAsset[] = [];
+  for (const item of items) {
+    if (item.mediaAssetId) {
+      const asset = ownedById.get(item.mediaAssetId);
+      if (!asset) return fail('forbidden');
+      resolved.push(asset);
+      continue;
+    }
+    // Legacy attach-by-key: only the owner's namespace is allowed.
+    if (item.key && item.url && item.type === 'image') {
+      if (!item.key.startsWith(`posts/${ownerId}/`)) return fail('forbidden');
+      resolved.push({
+        id: '',
+        kind: 'image',
+        provider: 'r2',
+        provider_id: item.key,
+        width: null,
+        height: null,
+        duration_ms: null,
+        lqip: null,
+        processing_status: 'ready',
+      });
+    }
+  }
+
+  const imageCount = resolved.filter((a) => a.kind === 'image').length;
+  const videoCount = resolved.filter((a) => a.kind === 'video').length;
+  if (imageCount > MAX_IMAGES_PER_POST) return fail('tooManyImages');
+  if (videoCount > 1) return fail('tooManyVideos');
+  if (videoCount > 0 && imageCount > 0) return fail('mixedMediaUnsupported');
+
+  return resolved;
 }
 
 const FEED_COLUMNS = `
@@ -203,32 +320,32 @@ export async function handlePostsRequest(
       `post:${auth.payload.sub}`,
       20,
       3600,
+      env.ENABLE_TEST_ROUTES === 'true',
     );
     if (rateLimited) return rateLimited;
 
     const body = await readJson<{
       text?: string;
-      media?: Array<{ key?: string; url?: string; type?: string }>;
+      media?: Array<{ mediaAssetId?: string; key?: string; url?: string; type?: string }>;
     }>(request);
     if (!body) return errorResponse(request, 'invalidRequest');
 
     const text = (body.text ?? '').trim();
-    const media = Array.isArray(body.media) ? body.media : [];
+    const mediaInput = Array.isArray(body.media) ? body.media : [];
 
     if (text.length > MAX_TEXT) {
       return errorResponse(request, 'postTooLong');
     }
-    if (!text && media.length === 0) {
+    if (!text && mediaInput.length === 0) {
       return errorResponse(request, 'postEmpty');
     }
 
-    const validMedia = media.filter(
-      (m): m is { key: string; url: string; type: string } =>
-        Boolean(m.key && m.url && m.type === 'image'),
-    );
+    const resolved = await resolveOwnedMedia(request, env, auth.payload.sub, mediaInput);
+    if (resolved instanceof Response) return resolved;
 
     const postId = crypto.randomUUID();
     const now = new Date().toISOString();
+    const origin = env.MEDIA_CDN_URL?.replace(/\/$/, '') ?? new URL(request.url).origin;
 
     const statements = [
       env.DB.prepare(
@@ -240,12 +357,40 @@ export async function handlePostsRequest(
       ),
     ];
 
-    validMedia.forEach((m, index) => {
+    resolved.forEach((asset, index) => {
+      const url =
+        asset.provider === 'cf_images'
+          ? imageDeliveryUrl(env, asset.provider_id, 'medium')
+          : asset.provider === 'cf_stream'
+            ? streamHlsUrl(env, asset.provider_id)
+            : `${origin}/media/${asset.provider_id}`;
+      const posterUrl =
+        asset.provider === 'cf_stream' ? streamPosterUrl(env, asset.provider_id) : null;
       statements.push(
         env.DB.prepare(
-          `INSERT INTO post_media (id, post_id, type, r2_key, url, sort_order, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        ).bind(crypto.randomUUID(), postId, 'image', m.key, m.url, index, now),
+          `INSERT INTO post_media
+             (id, post_id, type, r2_key, url, sort_order, created_at,
+              media_asset_id, provider, provider_id, width, height, duration_ms,
+              poster_url, lqip, processing_status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ).bind(
+          crypto.randomUUID(),
+          postId,
+          asset.kind,
+          asset.provider_id,
+          url,
+          index,
+          now,
+          asset.id || null,
+          asset.provider,
+          asset.provider_id,
+          asset.width,
+          asset.height,
+          asset.duration_ms,
+          posterUrl,
+          asset.lqip,
+          asset.processing_status,
+        ),
       );
     });
 
@@ -261,11 +406,8 @@ export async function handlePostsRequest(
 
     if (!row) return errorResponse(request, 'unknown', 500);
 
-    const imageUrl = validMedia[0]?.url;
-    return jsonResponse(request, {
-      ok: true,
-      post: serializePost(row, imageUrl, false),
-    });
+    const [post] = await hydratePosts(env, [row], auth.payload.sub);
+    return jsonResponse(request, { ok: true, post });
   }
 
   // /posts/:id and /posts/:id/like
@@ -314,6 +456,8 @@ export async function handlePostsRequest(
           'UPDATE users SET posts_count = MAX(posts_count - 1, 0) WHERE id = ?',
         ).bind(auth.payload.sub),
       ]);
+
+      await cleanupPostMedia(env, postId);
 
       return jsonResponse(request, { ok: true });
     }

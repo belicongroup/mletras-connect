@@ -1,0 +1,16 @@
+# Local development only — copy to .dev.vars (gitignored)
+JWT_SECRET=your-local-jwt-secret-at-least-32-characters
+RESEND_API_KEY=re_optional_when_ENABLE_TEST_ROUTES_is_true
+
+# --- Media pipeline (optional) ---
+# Leave all blank to use the raw-R2 fallback (no external processing).
+# Cloudflare Images (responsive photo variants + EXIF strip on ingest):
+CF_ACCOUNT_ID=
+CF_IMAGES_TOKEN=
+CF_IMAGES_HASH=
+# Cloudflare Stream (video transcode + HLS + poster):
+CF_STREAM_TOKEN=
+CF_STREAM_CUSTOMER_CODE=
+CF_STREAM_WEBHOOK_SECRET=
+# Optional custom media CDN origin (R2 delivery / Images custom domain):
+MEDIA_CDN_URL=

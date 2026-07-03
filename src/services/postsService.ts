@@ -1,6 +1,9 @@
 import { API_URL } from '../config/api';
 import { Post, UserProfile } from '../types';
 import { getToken } from './profileService';
+import type { UploadedMedia } from './mediaService';
+
+export type { UploadedMedia } from './mediaService';
 
 interface ApiPost extends Post {
   author: UserProfile;
@@ -10,12 +13,6 @@ export interface FeedPage {
   posts: Post[];
   authors: UserProfile[];
   nextCursor: string | null;
-}
-
-export interface UploadedMedia {
-  key: string;
-  url: string;
-  type: 'image';
 }
 
 interface RequestResult<T> {
@@ -114,9 +111,10 @@ export async function createPost(input: {
   text: string;
   media?: UploadedMedia[];
 }): Promise<{ post: Post; author: UserProfile } | null> {
+  const media = (input.media ?? []).map((m) => ({ mediaAssetId: m.mediaAssetId }));
   const result = await requestJson<{ post: ApiPost }>('/posts', {
     method: 'POST',
-    body: JSON.stringify({ text: input.text, media: input.media ?? [] }),
+    body: JSON.stringify({ text: input.text, media }),
   });
 
   if (!result.ok || !result.data) return null;
@@ -147,29 +145,4 @@ export async function unlikePost(
     { method: 'DELETE' },
   );
   return result.ok && result.data ? result.data : null;
-}
-
-export async function uploadImage(uri: string, mimeType: string): Promise<UploadedMedia | null> {
-  try {
-    const fileResponse = await fetch(uri);
-    const blob = await fileResponse.blob();
-    const contentType = mimeType || blob.type || 'image/jpeg';
-
-    const response = await fetch(`${API_URL}/media/upload`, {
-      method: 'POST',
-      headers: await authHeaders({ 'Content-Type': contentType }),
-      body: blob,
-    });
-
-    const body = (await response.json().catch(() => null)) as
-      | { ok?: boolean; key?: string; url?: string; type?: string }
-      | null;
-
-    if (!response.ok || !body?.ok || !body.key || !body.url) {
-      return null;
-    }
-    return { key: body.key, url: body.url, type: 'image' };
-  } catch {
-    return null;
-  }
 }

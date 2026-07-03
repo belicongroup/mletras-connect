@@ -28,11 +28,39 @@ export interface UserProfile {
   createdAt: string;
 }
 
+export interface ImageVariantUrls {
+  thumb: string;
+  small: string;
+  medium: string;
+  large: string;
+  original: string;
+}
+
+export type MediaProcessingStatus = 'ready' | 'pending' | 'failed';
+
+export interface PostMedia {
+  type: 'image' | 'video';
+  /** Default URL: medium image variant, or HLS manifest for video. */
+  url: string;
+  width?: number;
+  height?: number;
+  /** Tiny base64 placeholder for progressive loading. */
+  lqip?: string;
+  processingStatus: MediaProcessingStatus;
+  /** Responsive image variants; pick by screen size + network. */
+  variants?: ImageVariantUrls;
+  hlsUrl?: string;
+  posterUrl?: string;
+  durationMs?: number;
+}
+
 export interface Post {
   id: string;
   authorId: string;
   text: string;
+  /** Retained for backward compatibility: first image's medium variant. */
   imageUrl?: string;
+  media?: PostMedia[];
   createdAt: string;
   likesCount: number;
   commentsCount: number;

@@ -15,14 +15,24 @@ import { colors, spacing, typography } from '../theme';
 
 const MAX_CHARS = 280;
 
+export interface PickedMedia {
+  uri: string;
+  kind: 'image' | 'video';
+  width?: number;
+  height?: number;
+}
+
 interface ComposerModalProps {
   visible: boolean;
   text: string;
-  imageUri: string | null;
+  media: PickedMedia[];
   submitting: boolean;
+  /** 0..1 aggregate upload progress, or null when not uploading. */
+  uploadProgress: number | null;
+  canAddMore: boolean;
   onChangeText: (text: string) => void;
-  onPickImage: () => void;
-  onRemoveImage: () => void;
+  onAddMedia: () => void;
+  onRemoveMedia: (index: number) => void;
   onClose: () => void;
   onSubmit: () => void;
 }
@@ -30,16 +40,19 @@ interface ComposerModalProps {
 function ComposerModalComponent({
   visible,
   text,
-  imageUri,
+  media,
   submitting,
+  uploadProgress,
+  canAddMore,
   onChangeText,
-  onPickImage,
-  onRemoveImage,
+  onAddMedia,
+  onRemoveMedia,
   onClose,
   onSubmit,
 }: ComposerModalProps) {
-  const canSubmit = (text.trim().length > 0 || imageUri !== null) && !submitting;
+  const canSubmit = (text.trim().length > 0 || media.length > 0) && !submitting;
   const remaining = MAX_CHARS - text.length;
+  const progressPct = uploadProgress !== null ? Math.round(uploadProgress * 100) : 0;
 
   return (
     <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
@@ -70,32 +83,56 @@ function ComposerModalComponent({
               maxLength={MAX_CHARS}
             />
 
-            {imageUri ? (
-              <View style={styles.previewWrap}>
-                <Image style={styles.preview} source={{ uri: imageUri }} contentFit="cover" />
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Remove image"
-                  onPress={onRemoveImage}
-                  style={styles.removeBtn}
-                  hitSlop={8}
-                >
-                  <Ionicons name="close" size={18} color={colors.text} />
-                </Pressable>
+            {media.length > 0 ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.thumbs}>
+                {media.map((item, index) => (
+                  <View key={`${item.uri}-${index}`} style={styles.thumbWrap}>
+                    {item.kind === 'video' ? (
+                      <View style={[styles.thumb, styles.videoThumb]}>
+                        <Ionicons name="videocam" size={22} color={colors.text} />
+                      </View>
+                    ) : (
+                      <Image style={styles.thumb} source={{ uri: item.uri }} contentFit="cover" />
+                    )}
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Remove media"
+                      onPress={() => onRemoveMedia(index)}
+                      style={styles.removeBtn}
+                      hitSlop={8}
+                    >
+                      <Ionicons name="close" size={16} color={colors.text} />
+                    </Pressable>
+                  </View>
+                ))}
+              </ScrollView>
+            ) : null}
+
+            {submitting && uploadProgress !== null ? (
+              <View style={styles.progressWrap}>
+                <View style={styles.progressTrack}>
+                  <View style={[styles.progressFill, { width: `${progressPct}%` }]} />
+                </View>
+                <Text style={styles.progressLabel}>Optimizing and uploading… {progressPct}%</Text>
               </View>
             ) : null}
 
             <View style={styles.toolbar}>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Add image"
-                onPress={onPickImage}
-                style={({ pressed }) => [styles.toolBtn, pressed && styles.pressed]}
+                accessibilityLabel="Add photo or video"
+                onPress={onAddMedia}
+                disabled={!canAddMore}
+                style={({ pressed }) => [
+                  styles.toolBtn,
+                  pressed && styles.pressed,
+                  !canAddMore && styles.toolBtnDisabled,
+                ]}
               >
                 <Ionicons
-                  name={imageUri ? 'image' : 'image-outline'}
+                  name={media.length > 0 ? 'images' : 'images-outline'}
                   size={22}
-                  color={imageUri ? colors.primary : colors.textSecondary}
+                  color={media.length > 0 ? colors.primary : colors.textSecondary}
                 />
               </Pressable>
               <Text style={[styles.counter, remaining < 20 && styles.counterWarn]}>
@@ -147,26 +184,51 @@ const styles = StyleSheet.create({
     minHeight: 120,
     textAlignVertical: 'top',
   },
-  previewWrap: {
+  thumbs: {
     marginTop: spacing.md,
-    position: 'relative',
   },
-  preview: {
-    width: '100%',
-    aspectRatio: 4 / 3,
-    borderRadius: 16,
+  thumbWrap: {
+    position: 'relative',
+    marginRight: spacing.sm,
+  },
+  thumb: {
+    width: 96,
+    height: 96,
+    borderRadius: 12,
     backgroundColor: colors.placeholder,
+  },
+  videoThumb: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   removeBtn: {
     position: 'absolute',
-    top: spacing.sm,
-    right: spacing.sm,
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    top: 4,
+    right: 4,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  progressWrap: {
+    marginTop: spacing.md,
+    gap: spacing.xs,
+  },
+  progressTrack: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.placeholder,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: colors.primary,
+  },
+  progressLabel: {
+    ...typography.small,
+    color: colors.textSecondary,
   },
   toolbar: {
     flexDirection: 'row',
@@ -179,6 +241,9 @@ const styles = StyleSheet.create({
   toolBtn: {
     padding: spacing.sm,
     marginRight: spacing.sm,
+  },
+  toolBtnDisabled: {
+    opacity: 0.4,
   },
   counter: {
     ...typography.small,

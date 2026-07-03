@@ -1,6 +1,7 @@
 import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   FlatList,
   RefreshControl,
@@ -10,23 +11,27 @@ import {
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as ImagePicker from 'expo-image-picker';
-import { ComposerModal } from '../components/ComposerModal';
+import { ComposerModal, PickedMedia } from '../components/ComposerModal';
 import { DrawerMenu } from '../components/DrawerMenu';
 import { Fab } from '../components/Fab';
 import { FeedHeader } from '../components/FeedHeader';
 import { FeedPost } from '../components/FeedPost';
 import { useApp } from '../context/AppContext';
 import { useAuthLanguage } from '../context/AuthLanguageContext';
-import { uploadImage } from '../services/postsService';
+import {
+  getMediaStatus,
+  uploadImage,
+  uploadVideo,
+  type UploadedMedia,
+} from '../services/mediaService';
 import { Post, RootStackParamList } from '../types';
 import { colors, layout, spacing, typography } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Feed'>;
 
-interface PickedImage {
-  uri: string;
-  mimeType: string;
-}
+const MAX_IMAGES = 10;
+const VIDEO_POLL_INTERVAL_MS = 3000;
+const VIDEO_POLL_MAX_ATTEMPTS = 40; // ~2 minutes
 
 export function FeedScreen({ navigation }: Props) {
   const {
@@ -48,9 +53,14 @@ export function FeedScreen({ navigation }: Props) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
   const [composerText, setComposerText] = useState('');
-  const [pickedImage, setPickedImage] = useState<PickedImage | null>(null);
+  const [pickedMedia, setPickedMedia] = useState<PickedMedia[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const slideAnim = useRef(new Animated.Value(-280)).current;
+
+  const hasVideo = pickedMedia.some((m) => m.kind === 'video');
+  const imageCount = pickedMedia.filter((m) => m.kind === 'image').length;
+  const canAddMore = !hasVideo && imageCount < MAX_IMAGES;
 
   const openDrawer = useCallback(() => {
     setDrawerOpen(true);
@@ -66,46 +76,133 @@ export function FeedScreen({ navigation }: Props) {
   const closeComposer = useCallback(() => {
     setComposerOpen(false);
     setComposerText('');
-    setPickedImage(null);
+    setPickedMedia([]);
+    setUploadProgress(null);
   }, []);
 
-  const handlePickImage = useCallback(async () => {
+  const handleAddMedia = useCallback(async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) return;
 
+    const remaining = MAX_IMAGES - imageCount;
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
+      mediaTypes: ['images', 'videos'],
+      allowsMultipleSelection: true,
+      selectionLimit: remaining,
       quality: 0.8,
     });
+    if (result.canceled) return;
 
-    if (!result.canceled && result.assets[0]) {
-      const asset = result.assets[0];
-      setPickedImage({ uri: asset.uri, mimeType: asset.mimeType ?? 'image/jpeg' });
-    }
-  }, []);
-
-  const handleSubmitPost = useCallback(async () => {
-    if ((!composerText.trim() && !pickedImage) || submitting) return;
-
-    setSubmitting(true);
-    let media;
-    if (pickedImage) {
-      const uploaded = await uploadImage(pickedImage.uri, pickedImage.mimeType);
-      if (!uploaded) {
-        setSubmitting(false);
+    const selectedVideo = result.assets.find((a) => a.type === 'video');
+    if (selectedVideo) {
+      // Keep composition simple: a post is either photos or a single video.
+      if (pickedMedia.length > 0 || result.assets.length > 1) {
+        Alert.alert('One at a time', 'Choose photos or a single video, not both.');
         return;
       }
-      media = [uploaded];
+      setPickedMedia([
+        {
+          uri: selectedVideo.uri,
+          kind: 'video',
+          width: selectedVideo.width,
+          height: selectedVideo.height,
+        },
+      ]);
+      return;
     }
 
-    const result = await addPost({ text: composerText, media });
+    const images: PickedMedia[] = result.assets
+      .filter((a) => a.type !== 'video')
+      .map((a) => ({ uri: a.uri, kind: 'image', width: a.width, height: a.height }));
+    setPickedMedia((prev) => [...prev, ...images].slice(0, MAX_IMAGES));
+  }, [imageCount, pickedMedia]);
+
+  const removeMedia = useCallback((index: number) => {
+    setPickedMedia((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+
+  /** Uploads all picked media with a concurrency of 3, reporting aggregate progress. */
+  const uploadAll = useCallback(
+    async (items: PickedMedia[]): Promise<UploadedMedia[] | null> => {
+      const progress = new Array(items.length).fill(0);
+      const report = () =>
+        setUploadProgress(progress.reduce((a, b) => a + b, 0) / items.length);
+      const results: (UploadedMedia | null)[] = new Array(items.length).fill(null);
+      let cursor = 0;
+
+      const worker = async () => {
+        for (;;) {
+          const i = cursor;
+          cursor += 1;
+          if (i >= items.length) return;
+          const item = items[i];
+          const onProgress = (f: number) => {
+            progress[i] = f;
+            report();
+          };
+          results[i] =
+            item.kind === 'video'
+              ? await uploadVideo(item.uri, onProgress)
+              : await uploadImage(item.uri, onProgress, item.width, item.height);
+          progress[i] = 1;
+          report();
+        }
+      };
+
+      await Promise.all([worker(), worker(), worker()]);
+      return results.some((r) => r === null) ? null : (results as UploadedMedia[]);
+    },
+    [],
+  );
+
+  /** After a video post, poll until Stream finishes transcoding, then refresh. */
+  const pollVideos = useCallback(
+    (uploaded: UploadedMedia[]) => {
+      const videos = uploaded.filter((u) => u.type === 'video');
+      if (videos.length === 0) return;
+      let attempts = 0;
+      const tick = async () => {
+        attempts += 1;
+        const statuses = await Promise.all(videos.map((v) => getMediaStatus(v.mediaAssetId)));
+        if (statuses.every((s) => s?.processingStatus === 'ready')) {
+          refreshFeed();
+          return;
+        }
+        if (attempts < VIDEO_POLL_MAX_ATTEMPTS) setTimeout(tick, VIDEO_POLL_INTERVAL_MS);
+      };
+      setTimeout(tick, VIDEO_POLL_INTERVAL_MS);
+    },
+    [refreshFeed],
+  );
+
+  const handleSubmitPost = useCallback(async () => {
+    if ((!composerText.trim() && pickedMedia.length === 0) || submitting) return;
+
+    setSubmitting(true);
+    let uploaded: UploadedMedia[] = [];
+    if (pickedMedia.length > 0) {
+      setUploadProgress(0);
+      const result = await uploadAll(pickedMedia);
+      if (!result) {
+        setSubmitting(false);
+        setUploadProgress(null);
+        Alert.alert('Upload failed', 'Some media could not be uploaded. Please try again.');
+        return;
+      }
+      uploaded = result;
+    }
+
+    const result = await addPost({ text: composerText, media: uploaded });
     setSubmitting(false);
+    setUploadProgress(null);
 
     if (result.ok) {
+      pollVideos(uploaded);
       closeComposer();
+    } else {
+      Alert.alert('Post failed', 'Your post could not be published. Please try again.');
     }
-  }, [addPost, closeComposer, composerText, pickedImage, submitting]);
+  }, [addPost, closeComposer, composerText, pickedMedia, pollVideos, submitting, uploadAll]);
 
   const handleSignOut = useCallback(async () => {
     await signOut();
@@ -175,6 +272,10 @@ export function FeedScreen({ navigation }: Props) {
           onEndReachedThreshold={0.5}
           ListFooterComponent={renderFooter}
           ListEmptyComponent={renderEmpty}
+          initialNumToRender={6}
+          maxToRenderPerBatch={8}
+          windowSize={11}
+          removeClippedSubviews
         />
         <Fab onPress={() => setComposerOpen(true)} />
       </View>
@@ -193,11 +294,13 @@ export function FeedScreen({ navigation }: Props) {
       <ComposerModal
         visible={composerOpen}
         text={composerText}
-        imageUri={pickedImage?.uri ?? null}
+        media={pickedMedia}
         submitting={submitting}
+        uploadProgress={uploadProgress}
+        canAddMore={canAddMore}
         onChangeText={setComposerText}
-        onPickImage={handlePickImage}
-        onRemoveImage={() => setPickedImage(null)}
+        onAddMedia={handleAddMedia}
+        onRemoveMedia={removeMedia}
         onClose={closeComposer}
         onSubmit={handleSubmitPost}
       />

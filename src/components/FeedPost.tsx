@@ -1,10 +1,11 @@
-import React, { memo, useCallback } from 'react';
+import React, { memo, useCallback, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from './Avatar';
+import { MediaCarousel } from './MediaCarousel';
+import { PostVideo } from './PostVideo';
 import { colors, spacing, typography } from '../theme';
-import { Post, UserProfile } from '../types';
+import { Post, PostMedia, UserProfile } from '../types';
 import { formatCount, formatRelativeTime, getLocation } from '../utils/format';
 
 interface FeedPostProps {
@@ -17,6 +18,18 @@ interface FeedPostProps {
 function FeedPostComponent({ post, author, onLike, onComment }: FeedPostProps) {
   const handleLike = useCallback(() => onLike(post.id), [onLike, post.id]);
   const handleComment = useCallback(() => onComment?.(post.id), [onComment, post.id]);
+
+  // Prefer the responsive media array; fall back to the legacy single image.
+  const media: PostMedia[] = useMemo(() => {
+    if (post.media && post.media.length > 0) return post.media;
+    if (post.imageUrl) {
+      return [{ type: 'image', url: post.imageUrl, processingStatus: 'ready' }];
+    }
+    return [];
+  }, [post.media, post.imageUrl]);
+
+  const video = media.find((m) => m.type === 'video');
+  const images = media.filter((m) => m.type === 'image');
 
   return (
     <View style={styles.container}>
@@ -31,13 +44,10 @@ function FeedPostComponent({ post, author, onLike, onComment }: FeedPostProps) {
           <Text style={styles.location}>{getLocation(author.city, author.state)}</Text>
           <Text style={styles.text}>{post.text}</Text>
 
-          {post.imageUrl ? (
-            <Image
-              style={styles.media}
-              source={{ uri: post.imageUrl }}
-              contentFit="cover"
-              transition={150}
-            />
+          {video ? (
+            <PostVideo media={video} />
+          ) : images.length > 0 ? (
+            <MediaCarousel media={images} />
           ) : null}
 
           <View style={styles.actions}>
@@ -117,13 +127,6 @@ const styles = StyleSheet.create({
   text: {
     ...typography.body,
     color: colors.text,
-  },
-  media: {
-    width: '100%',
-    aspectRatio: 4 / 3,
-    borderRadius: 16,
-    marginTop: spacing.md,
-    backgroundColor: colors.placeholder,
   },
   actions: {
     flexDirection: 'row',

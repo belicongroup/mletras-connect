@@ -16,8 +16,19 @@ id = "7702d858fe95492595b13de409ec3f5e"
 binding = "MEDIA"
 bucket_name = "mletras-connect-media"
 
+# Daily media lifecycle sweep: removes abandoned uploads and orphaned R2 objects.
+[triggers]
+crons = ["0 4 * * *"]
+
 [vars]
 FROM_EMAIL = "MLetras Connect <connect@mletras.com>"
+# Media pipeline configuration. Non-secret values live here; tokens are set via
+# `wrangler secret put` (CF_IMAGES_TOKEN, CF_STREAM_TOKEN, CF_STREAM_WEBHOOK_SECRET).
+# Leave these blank to keep the raw-R2 fallback path active.
+# CF_ACCOUNT_ID = ""
+# CF_IMAGES_HASH = ""
+# CF_STREAM_CUSTOMER_CODE = ""
+# MEDIA_CDN_URL = "https://media.mletras.com"
 
 [[routes]]
 pattern = "connect-api.mletras.com"

@@ -41,10 +41,41 @@ CREATE TABLE IF NOT EXISTS post_media (
   url TEXT NOT NULL,
   sort_order INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL,
+  media_asset_id TEXT,
+  provider TEXT NOT NULL DEFAULT 'r2',
+  provider_id TEXT,
+  width INTEGER,
+  height INTEGER,
+  duration_ms INTEGER,
+  poster_url TEXT,
+  lqip TEXT,
+  processing_status TEXT NOT NULL DEFAULT 'ready',
   FOREIGN KEY (post_id) REFERENCES posts (id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_post_media_post ON post_media (post_id, sort_order);
+
+CREATE TABLE IF NOT EXISTS media_assets (
+  id TEXT PRIMARY KEY,
+  owner_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  provider TEXT NOT NULL,
+  provider_id TEXT NOT NULL,
+  content_hash TEXT,
+  width INTEGER,
+  height INTEGER,
+  duration_ms INTEGER,
+  bytes INTEGER,
+  lqip TEXT,
+  processing_status TEXT NOT NULL DEFAULT 'ready',
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (owner_id) REFERENCES users (id)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_media_assets_dedup
+  ON media_assets (owner_id, content_hash);
+CREATE INDEX IF NOT EXISTS idx_media_assets_owner ON media_assets (owner_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_media_assets_provider ON media_assets (provider, provider_id);
 
 CREATE TABLE IF NOT EXISTS post_likes (
   post_id TEXT NOT NULL,

@@ -1,58 +1,43 @@
 import { useCallback, useRef, useState } from 'react';
 import { Animated, LayoutChangeEvent, NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 
-const SCROLL_THRESHOLD = 5;
-const HEADER_ANIM_DURATION = 200;
-
 export function useCollapsingHeader() {
   const headerHeightRef = useRef(0);
   const lastScrollY = useRef(0);
+  const offsetRef = useRef(0);
   const headerOffset = useRef(new Animated.Value(0)).current;
-  const headerVisible = useRef(true);
   const [headerHeight, setHeaderHeight] = useState(0);
-
-  const showHeader = useCallback(() => {
-    if (headerVisible.current) return;
-    headerVisible.current = true;
-    Animated.timing(headerOffset, {
-      toValue: 0,
-      duration: HEADER_ANIM_DURATION,
-      useNativeDriver: true,
-    }).start();
-  }, [headerOffset]);
-
-  const hideHeader = useCallback(() => {
-    if (!headerVisible.current || headerHeightRef.current === 0) return;
-    headerVisible.current = false;
-    Animated.timing(headerOffset, {
-      toValue: -headerHeightRef.current,
-      duration: HEADER_ANIM_DURATION,
-      useNativeDriver: true,
-    }).start();
-  }, [headerOffset]);
 
   const onHeaderLayout = useCallback((event: LayoutChangeEvent) => {
     const height = event.nativeEvent.layout.height;
     headerHeightRef.current = height;
     setHeaderHeight(height);
+    // Keep current offset in range when layout changes (e.g. safe area changes).
+    if (offsetRef.current > height) {
+      offsetRef.current = height;
+      headerOffset.setValue(-height);
+    }
   }, []);
 
   const onScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const currentY = event.nativeEvent.contentOffset.y;
-      const diff = currentY - lastScrollY.current;
+      const maxOffset = headerHeightRef.current;
+      if (maxOffset <= 0) return;
 
-      if (currentY <= 0) {
-        showHeader();
-      } else if (diff > SCROLL_THRESHOLD && currentY > 10) {
-        hideHeader();
-      } else if (diff < -SCROLL_THRESHOLD) {
-        showHeader();
-      }
-
+      const currentY = Math.max(0, event.nativeEvent.contentOffset.y);
+      const deltaY = currentY - lastScrollY.current;
       lastScrollY.current = currentY;
+
+      let nextOffset = offsetRef.current + deltaY;
+      if (nextOffset < 0) nextOffset = 0;
+      if (nextOffset > maxOffset) nextOffset = maxOffset;
+
+      if (nextOffset !== offsetRef.current) {
+        offsetRef.current = nextOffset;
+        headerOffset.setValue(-nextOffset);
+      }
     },
-    [hideHeader, showHeader],
+    [headerOffset],
   );
 
   return { headerOffset, headerHeight, onHeaderLayout, onScroll };

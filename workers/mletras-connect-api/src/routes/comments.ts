@@ -79,6 +79,48 @@ export async function handleCommentsRequest(
   env: Env,
   path: string,
 ): Promise<Response | null> {
+  // DELETE /posts/:postId/comments/:commentId
+  const deleteMatch = path.match(/^\/posts\/([^/]+)\/comments\/([^/]+)$/);
+  if (deleteMatch && request.method === 'DELETE') {
+    const postId = deleteMatch[1];
+    const commentId = deleteMatch[2];
+    const auth = await requireAuth(request, env);
+    if (auth instanceof Response) return auth;
+
+    const comment = await env.DB.prepare(
+      'SELECT id, author_id, parent_id, post_id FROM comments WHERE id = ? AND post_id = ?',
+    )
+      .bind(commentId, postId)
+      .first<{ id: string; author_id: string; parent_id: string | null; post_id: string }>();
+
+    if (!comment) return errorResponse(request, 'notFound', 404);
+    if (comment.author_id !== auth.payload.sub) return errorResponse(request, 'forbidden', 403);
+
+    // Top-level comment: remove the whole reply thread beneath it.
+    const idsToDelete = [commentId];
+    if (!comment.parent_id) {
+      const replies = await env.DB.prepare('SELECT id FROM comments WHERE parent_id = ?')
+        .bind(commentId)
+        .all<{ id: string }>();
+      idsToDelete.push(...(replies.results ?? []).map((r) => r.id));
+    }
+
+    const placeholders = idsToDelete.map(() => '?').join(', ');
+    const removed = idsToDelete.length;
+
+    await env.DB.batch([
+      env.DB.prepare(`DELETE FROM notifications WHERE comment_id IN (${placeholders})`).bind(
+        ...idsToDelete,
+      ),
+      env.DB.prepare(`DELETE FROM comments WHERE id IN (${placeholders})`).bind(...idsToDelete),
+      env.DB.prepare(
+        'UPDATE posts SET comments_count = MAX(comments_count - ?, 0) WHERE id = ?',
+      ).bind(removed, postId),
+    ]);
+
+    return jsonResponse(request, { ok: true, removed });
+  }
+
   // Match /posts/:id/comments
   const match = path.match(/^\/posts\/([^/]+)\/comments$/);
   if (!match) return null;
@@ -159,6 +201,7 @@ export async function handleCommentsRequest(
       `comment:${auth.payload.sub}`,
       30,
       3600,
+      env.ENABLE_TEST_ROUTES === 'true',
     );
     if (rateLimited) return rateLimited;
 

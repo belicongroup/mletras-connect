@@ -15,13 +15,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '../components/Avatar';
+import { OptionsMenu } from '../components/OptionsMenu';
 import { useApp } from '../context/AppContext';
 import { useAuthLanguage } from '../context/AuthLanguageContext';
-import { createComment, getComments } from '../services/commentsService';
+import { createComment, deleteComment, getComments } from '../services/commentsService';
 import { getPost } from '../services/postsService';
 import { Comment, Post, RootStackParamList, UserProfile } from '../types';
 import { colors, layout, spacing, typography } from '../theme';
 import { formatRelativeTime, getLocation } from '../utils/format';
+import { confirmAction, showAlert } from '../utils/alert';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CommentThread'>;
 
@@ -41,15 +43,43 @@ function flatten(comments: Comment[]): FlatComment[] {
   return out;
 }
 
-function CommentRow({ comment, isReply }: FlatComment) {
+function CommentRow({
+  comment,
+  isReply,
+  postId,
+  currentUserId,
+  onDelete,
+}: FlatComment & {
+  postId: string;
+  currentUserId?: string;
+  onDelete: (commentId: string) => void;
+}) {
+  const isOwner = currentUserId === comment.authorId;
+
+  const handleDelete = async () => {
+    const confirmed = await confirmAction(
+      'Delete comment?',
+      'This permanently removes the comment. This cannot be undone.',
+    );
+    if (confirmed) onDelete(comment.id);
+  };
+
   return (
     <View style={[styles.commentRow, isReply && styles.replyRow]}>
       <Avatar user={comment.author} size={isReply ? 28 : 36} />
       <View style={styles.commentBody}>
-        <View style={styles.commentHeader}>
-          <Text style={styles.commentUser}>@{comment.author.username}</Text>
-          <Text style={styles.dot}>·</Text>
-          <Text style={styles.commentMeta}>{formatRelativeTime(comment.createdAt)}</Text>
+        <View style={styles.commentHeaderRow}>
+          <View style={styles.commentHeader}>
+            <Text style={styles.commentUser}>@{comment.author.username}</Text>
+            <Text style={styles.dot}>·</Text>
+            <Text style={styles.commentMeta}>{formatRelativeTime(comment.createdAt)}</Text>
+          </View>
+          {isOwner ? (
+            <OptionsMenu
+              accessibilityLabel="Comment options"
+              options={[{ label: 'Delete comment', destructive: true, onPress: handleDelete }]}
+            />
+          ) : null}
         </View>
         <Text style={styles.commentText}>{comment.text}</Text>
       </View>
@@ -61,7 +91,7 @@ export function CommentThreadScreen({ route, navigation }: Props) {
   const { postId } = route.params;
   const insets = useSafeAreaInsets();
   const { strings } = useAuthLanguage();
-  const { incrementCommentCount } = useApp();
+  const { incrementCommentCount, currentUser, removePost } = useApp();
 
   const [post, setPost] = useState<Post | null>(null);
   const [author, setAuthor] = useState<UserProfile | null>(null);
@@ -120,19 +150,68 @@ export function CommentThreadScreen({ route, navigation }: Props) {
     }
   }, [draft, incrementCommentCount, postId, sending]);
 
+  const handleDeleteComment = useCallback(
+    async (commentId: string) => {
+      const removed = await deleteComment(postId, commentId);
+      if (removed === null) {
+        showAlert('Delete failed', 'Could not delete this comment. Please try again.');
+        return;
+      }
+      setComments((prev) =>
+        prev
+          .filter((c) => c.id !== commentId)
+          .map((c) => ({
+            ...c,
+            replies: (c.replies ?? []).filter((r) => r.id !== commentId),
+          })),
+      );
+      setPost((prev) =>
+        prev
+          ? { ...prev, commentsCount: Math.max(prev.commentsCount - removed, 0) }
+          : prev,
+      );
+    },
+    [postId],
+  );
+
+  const handleDeletePost = useCallback(async () => {
+    const confirmed = await confirmAction(
+      'Delete post?',
+      'This permanently removes the post, all comments, and media. This cannot be undone.',
+    );
+    if (!confirmed) return;
+    const result = await removePost(postId);
+    if (result.ok) {
+      navigation.goBack();
+    } else {
+      showAlert('Delete failed', 'Could not delete this post. Please try again.');
+    }
+  }, [navigation, postId, removePost]);
+
   const data = flatten(comments);
 
   const renderHeader = useCallback(() => {
     if (!post || !author) return null;
+    const isOwner = currentUser?.id === post.authorId;
     return (
       <View style={styles.postCard}>
         <View style={styles.postRow}>
           <Avatar user={author} size={40} />
           <View style={styles.postContent}>
-            <View style={styles.commentHeader}>
-              <Text style={styles.commentUser}>@{author.username}</Text>
-              <Text style={styles.dot}>·</Text>
-              <Text style={styles.commentMeta}>{formatRelativeTime(post.createdAt)}</Text>
+            <View style={styles.commentHeaderRow}>
+              <View style={styles.commentHeader}>
+                <Text style={styles.commentUser}>@{author.username}</Text>
+                <Text style={styles.dot}>·</Text>
+                <Text style={styles.commentMeta}>{formatRelativeTime(post.createdAt)}</Text>
+              </View>
+              {isOwner ? (
+                <OptionsMenu
+                  accessibilityLabel="Post options"
+                  options={[
+                    { label: 'Delete post', destructive: true, onPress: handleDeletePost },
+                  ]}
+                />
+              ) : null}
             </View>
             <Text style={styles.location}>{getLocation(author.city, author.state)}</Text>
             {post.text ? <Text style={styles.postText}>{post.text}</Text> : null}
@@ -144,7 +223,7 @@ export function CommentThreadScreen({ route, navigation }: Props) {
         <Text style={styles.commentsTitle}>{strings.comments}</Text>
       </View>
     );
-  }, [author, post, strings.comments]);
+  }, [author, currentUser?.id, handleDeletePost, post, strings.comments]);
 
   return (
     <KeyboardAvoidingView
@@ -172,7 +251,14 @@ export function CommentThreadScreen({ route, navigation }: Props) {
         <FlatList
           data={data}
           keyExtractor={(item) => item.comment.id}
-          renderItem={({ item }) => <CommentRow {...item} />}
+          renderItem={({ item }) => (
+            <CommentRow
+              {...item}
+              postId={postId}
+              currentUserId={currentUser?.id}
+              onDelete={handleDeleteComment}
+            />
+          )}
           ListHeaderComponent={renderHeader}
           ListEmptyComponent={<Text style={styles.empty}>{strings.noCommentsYet}</Text>}
           contentContainerStyle={styles.list}
@@ -288,7 +374,12 @@ const styles = StyleSheet.create({
   commentBody: {
     flex: 1,
   },
+  commentHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
   commentHeader: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',

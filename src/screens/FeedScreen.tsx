@@ -39,6 +39,7 @@ export function FeedScreen({ navigation }: Props) {
     users,
     toggleLike,
     addPost,
+    removePost,
     signOut,
     feedRefreshing,
     feedLoadingMore,
@@ -204,15 +205,32 @@ export function FeedScreen({ navigation }: Props) {
     [navigation],
   );
 
+  const handleDeletePost = useCallback(
+    async (postId: string) => {
+      const result = await removePost(postId);
+      if (!result.ok) {
+        showAlert('Delete failed', 'Could not delete this post. Please try again.');
+      }
+    },
+    [removePost],
+  );
+
   const renderItem = useCallback(
     ({ item }: { item: Post }) => {
       const author = users[item.authorId];
       if (!author) return null;
       return (
-        <FeedPost post={item} author={author} onLike={toggleLike} onComment={handleComment} />
+        <FeedPost
+          post={item}
+          author={author}
+          currentUserId={currentUser?.id}
+          onLike={toggleLike}
+          onComment={handleComment}
+          onDelete={handleDeletePost}
+        />
       );
     },
-    [handleComment, toggleLike, users],
+    [currentUser?.id, handleComment, handleDeletePost, toggleLike, users],
   );
 
   const keyExtractor = useCallback((item: Post) => item.id, []);

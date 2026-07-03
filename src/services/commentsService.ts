@@ -37,3 +37,11 @@ export async function createComment(
 
   return result.ok && result.data ? result.data.comment : null;
 }
+
+export async function deleteComment(postId: string, commentId: string): Promise<number | null> {
+  const result = await apiRequest<{ removed?: number }>(
+    `/posts/${postId}/comments/${commentId}`,
+    { method: 'DELETE' },
+  );
+  return result.ok && result.data?.removed != null ? result.data.removed : null;
+}

@@ -143,30 +143,84 @@ async function hydratePosts(
 }
 
 /**
- * Deletes provider-backed media for a post, but only when no other live post
- * still references the same underlying asset (guards deduped/shared assets).
+ * Removes all media files and asset records tied to a post when nothing else
+ * references them.
  */
 async function cleanupPostMedia(env: Env, postId: string): Promise<void> {
   const media = await env.DB.prepare(
-    `SELECT provider, provider_id, r2_key FROM post_media WHERE post_id = ?`,
+    `SELECT media_asset_id, provider, provider_id, r2_key FROM post_media WHERE post_id = ?`,
   )
     .bind(postId)
-    .all<{ provider: MediaProvider | null; provider_id: string | null; r2_key: string | null }>();
+    .all<{
+      media_asset_id: string | null;
+      provider: MediaProvider | null;
+      provider_id: string | null;
+      r2_key: string | null;
+    }>();
 
   for (const m of media.results ?? []) {
     const key = m.provider_id ?? m.r2_key;
-    if (!key) continue;
-    const others = await env.DB.prepare(
-      `SELECT 1 FROM post_media pm
-       JOIN posts p ON p.id = pm.post_id
-       WHERE pm.provider_id = ? AND pm.post_id != ? AND p.deleted_at IS NULL
-       LIMIT 1`,
-    )
-      .bind(key, postId)
-      .first();
-    if (others) continue;
-    await deleteProviderAsset(env, m.provider, m.provider_id, m.r2_key);
+    if (key) {
+      const others = await env.DB.prepare(
+        `SELECT 1 FROM post_media WHERE (provider_id = ? OR r2_key = ?) AND post_id != ? LIMIT 1`,
+      )
+        .bind(key, key, postId)
+        .first();
+      if (!others) {
+        await deleteProviderAsset(env, m.provider, m.provider_id, m.r2_key);
+      }
+    }
+    if (m.media_asset_id) {
+      const others = await env.DB.prepare(
+        `SELECT 1 FROM post_media WHERE media_asset_id = ? AND post_id != ? LIMIT 1`,
+      )
+        .bind(m.media_asset_id, postId)
+        .first();
+      if (!others) {
+        const asset = await env.DB.prepare(
+          `SELECT provider, provider_id FROM media_assets WHERE id = ?`,
+        )
+          .bind(m.media_asset_id)
+          .first<{ provider: MediaProvider; provider_id: string }>();
+        if (asset) {
+          await deleteProviderAsset(env, asset.provider, asset.provider_id, null);
+        }
+        await env.DB.prepare('DELETE FROM media_assets WHERE id = ?').bind(m.media_asset_id).run();
+      }
+    }
   }
+}
+
+/** Permanently removes a post and every related row (comments, likes, media, notifications). */
+async function purgePost(env: Env, postId: string, authorId: string): Promise<void> {
+  await cleanupPostMedia(env, postId);
+
+  const commentIds = await env.DB.prepare('SELECT id FROM comments WHERE post_id = ?')
+    .bind(postId)
+    .all<{ id: string }>();
+  const ids = (commentIds.results ?? []).map((c) => c.id);
+
+  const statements = [
+    env.DB.prepare('DELETE FROM notifications WHERE post_id = ?').bind(postId),
+    env.DB.prepare('DELETE FROM post_likes WHERE post_id = ?').bind(postId),
+    env.DB.prepare('DELETE FROM comments WHERE post_id = ?').bind(postId),
+    env.DB.prepare('DELETE FROM post_media WHERE post_id = ?').bind(postId),
+    env.DB.prepare('DELETE FROM posts WHERE id = ?').bind(postId),
+    env.DB.prepare('UPDATE users SET posts_count = MAX(posts_count - 1, 0) WHERE id = ?').bind(
+      authorId,
+    ),
+  ];
+
+  if (ids.length > 0) {
+    const placeholders = ids.map(() => '?').join(', ');
+    statements.unshift(
+      env.DB.prepare(
+        `DELETE FROM notifications WHERE comment_id IN (${placeholders})`,
+      ).bind(...ids),
+    );
+  }
+
+  await env.DB.batch(statements);
 }
 
 /**
@@ -438,26 +492,14 @@ export async function handlePostsRequest(
       const auth = await requireAuth(request, env);
       if (auth instanceof Response) return auth;
 
-      const post = await env.DB.prepare(
-        'SELECT author_id, deleted_at FROM posts WHERE id = ?',
-      )
+      const post = await env.DB.prepare('SELECT author_id FROM posts WHERE id = ?')
         .bind(postId)
-        .first<{ author_id: string; deleted_at: string | null }>();
+        .first<{ author_id: string }>();
 
-      if (!post || post.deleted_at) return errorResponse(request, 'notFound', 404);
+      if (!post) return errorResponse(request, 'notFound', 404);
       if (post.author_id !== auth.payload.sub) return errorResponse(request, 'forbidden', 403);
 
-      await env.DB.batch([
-        env.DB.prepare('UPDATE posts SET deleted_at = ? WHERE id = ?').bind(
-          new Date().toISOString(),
-          postId,
-        ),
-        env.DB.prepare(
-          'UPDATE users SET posts_count = MAX(posts_count - 1, 0) WHERE id = ?',
-        ).bind(auth.payload.sub),
-      ]);
-
-      await cleanupPostMedia(env, postId);
+      await purgePost(env, postId, auth.payload.sub);
 
       return jsonResponse(request, { ok: true });
     }

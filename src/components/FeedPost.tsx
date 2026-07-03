@@ -3,21 +3,41 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from './Avatar';
 import { MediaCarousel } from './MediaCarousel';
+import { OptionsMenu } from './OptionsMenu';
 import { PostVideo } from './PostVideo';
 import { colors, spacing, typography } from '../theme';
 import { Post, PostMedia, UserProfile } from '../types';
 import { formatCount, formatRelativeTime, getLocation } from '../utils/format';
+import { confirmAction } from '../utils/alert';
 
 interface FeedPostProps {
   post: Post;
   author: UserProfile;
+  currentUserId?: string;
   onLike: (postId: string) => void;
   onComment?: (postId: string) => void;
+  onDelete?: (postId: string) => void;
 }
 
-function FeedPostComponent({ post, author, onLike, onComment }: FeedPostProps) {
+function FeedPostComponent({
+  post,
+  author,
+  currentUserId,
+  onLike,
+  onComment,
+  onDelete,
+}: FeedPostProps) {
   const handleLike = useCallback(() => onLike(post.id), [onLike, post.id]);
   const handleComment = useCallback(() => onComment?.(post.id), [onComment, post.id]);
+  const isOwner = currentUserId === post.authorId;
+
+  const handleDelete = useCallback(async () => {
+    const confirmed = await confirmAction(
+      'Delete post?',
+      'This permanently removes the post, comments, and media. This cannot be undone.',
+    );
+    if (confirmed) onDelete?.(post.id);
+  }, [onDelete, post.id]);
 
   // Prefer the responsive media array; fall back to the legacy single image.
   const media: PostMedia[] = useMemo(() => {
@@ -36,10 +56,18 @@ function FeedPostComponent({ post, author, onLike, onComment }: FeedPostProps) {
       <View style={styles.row}>
         <Avatar user={author} size={40} />
         <View style={styles.content}>
-          <View style={styles.header}>
-            <Text style={styles.username}>@{author.username}</Text>
-            <Text style={styles.dot}>·</Text>
-            <Text style={styles.meta}>{formatRelativeTime(post.createdAt)}</Text>
+          <View style={styles.headerRow}>
+            <View style={styles.header}>
+              <Text style={styles.username}>@{author.username}</Text>
+              <Text style={styles.dot}>·</Text>
+              <Text style={styles.meta}>{formatRelativeTime(post.createdAt)}</Text>
+            </View>
+            {isOwner && onDelete ? (
+              <OptionsMenu
+                accessibilityLabel="Post options"
+                options={[{ label: 'Delete post', destructive: true, onPress: handleDelete }]}
+              />
+            ) : null}
           </View>
           <Text style={styles.location}>{getLocation(author.city, author.state)}</Text>
           <Text style={styles.text}>{post.text}</Text>
@@ -101,7 +129,12 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
   header: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',

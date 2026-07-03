@@ -11,7 +11,14 @@ import * as authService from '../services/authService';
 import * as notificationsService from '../services/notificationsService';
 import * as postsService from '../services/postsService';
 import type { UploadedMedia } from '../services/postsService';
-import { clearSession, getSession, saveSession } from '../services/profileService';
+import {
+  clearSession,
+  getCachedUser,
+  getSession,
+  saveCachedUser,
+  saveSession,
+} from '../services/profileService';
+import type { LocalSession } from '../services/profileService';
 import { Instrument, Post, UserProfile } from '../types';
 
 const UNREAD_POLL_INTERVAL_MS = 30000;
@@ -46,6 +53,7 @@ interface AppContextValue {
   signOut: () => Promise<void>;
   updateProfile: (data: Partial<SignUpInput>) => Promise<{ ok: boolean; error?: string }>;
   addPost: (input: CreatePostInput) => Promise<{ ok: boolean; error?: string }>;
+  removePost: (postId: string) => Promise<{ ok: boolean; error?: string }>;
   toggleLike: (postId: string) => void;
   refreshFeed: () => Promise<void>;
   loadMoreFeed: () => Promise<void>;
@@ -128,6 +136,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     loadingRef.current = false;
   }, [mergeAuthors]);
 
+  const restoreAuthenticatedUser = useCallback(
+    async (user: UserProfile, session: LocalSession) => {
+      setCurrentUser(user);
+      setHasCompletedProfile(session.hasCompletedProfile);
+      setUsers({ [user.id]: user });
+      await saveCachedUser(user);
+      await refreshFeed();
+      void refreshUnreadCount();
+    },
+    [refreshFeed, refreshUnreadCount],
+  );
+
   useEffect(() => {
     let mounted = true;
 
@@ -140,13 +160,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (!mounted) return;
 
         if (me.ok && me.data) {
-          setCurrentUser(me.data);
-          setHasCompletedProfile(session.hasCompletedProfile);
-          setUsers({ [me.data.id]: me.data });
-          await refreshFeed();
-          void refreshUnreadCount();
-        } else {
+          await restoreAuthenticatedUser(me.data, session);
+        } else if (me.error === 'unauthorized') {
           await clearSession();
+        } else {
+          const cached = await getCachedUser();
+          if (cached?.id === session.userId) {
+            await restoreAuthenticatedUser(cached, session);
+          }
         }
       }
 
@@ -157,7 +178,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return () => {
       mounted = false;
     };
-  }, [refreshFeed, refreshUnreadCount]);
+  }, [restoreAuthenticatedUser]);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -182,6 +203,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         token: result.data.token,
         hasCompletedProfile: true,
       });
+      await saveCachedUser(result.data.user);
       await refreshFeed();
       void refreshUnreadCount();
       return { ok: true };
@@ -219,6 +241,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         token: result.data.token,
         hasCompletedProfile: true,
       });
+      await saveCachedUser(result.data.user);
       await refreshFeed();
       return { ok: true };
     },
@@ -278,6 +301,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     },
     [currentUser],
   );
+
+  const removePost = useCallback(async (postId: string) => {
+    const ok = await postsService.deletePost(postId);
+    if (ok) {
+      setPosts((prev) => prev.filter((p) => p.id !== postId));
+      return { ok: true };
+    }
+    return { ok: false, error: 'unknown' };
+  }, []);
 
   const toggleLike = useCallback(
     (postId: string) => {
@@ -343,6 +375,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       signOut,
       updateProfile,
       addPost,
+      removePost,
       toggleLike,
       refreshFeed,
       loadMoreFeed,
@@ -365,6 +398,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       signOut,
       updateProfile,
       addPost,
+      removePost,
       toggleLike,
       refreshFeed,
       loadMoreFeed,

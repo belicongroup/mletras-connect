@@ -15,7 +15,7 @@ import { enforceRateLimit } from '../lib/rateLimit';
 const MAX_TEXT = 500;
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 50;
-const MAX_IMAGES_PER_POST = 10;
+const MAX_IMAGES_PER_POST = 1;
 
 interface PostRow {
   id: string;

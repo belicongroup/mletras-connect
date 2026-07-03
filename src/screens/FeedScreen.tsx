@@ -29,7 +29,6 @@ import { colors, layout, spacing, typography } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Feed'>;
 
-const MAX_IMAGES = 10;
 const VIDEO_POLL_INTERVAL_MS = 3000;
 const VIDEO_POLL_MAX_ATTEMPTS = 40; // ~2 minutes
 
@@ -58,9 +57,7 @@ export function FeedScreen({ navigation }: Props) {
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const slideAnim = useRef(new Animated.Value(-280)).current;
 
-  const hasVideo = pickedMedia.some((m) => m.kind === 'video');
-  const imageCount = pickedMedia.filter((m) => m.kind === 'image').length;
-  const canAddMore = !hasVideo && imageCount < MAX_IMAGES;
+  const canAddMore = pickedMedia.length === 0;
 
   const openDrawer = useCallback(() => {
     setDrawerOpen(true);
@@ -84,11 +81,11 @@ export function FeedScreen({ navigation }: Props) {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) return;
 
-    const remaining = MAX_IMAGES - imageCount;
+    if (pickedMedia.length > 0) return;
+
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images', 'videos'],
-      allowsMultipleSelection: true,
-      selectionLimit: remaining,
+      allowsMultipleSelection: false,
       quality: 0.8,
     });
     if (result.canceled) return;
@@ -111,11 +108,10 @@ export function FeedScreen({ navigation }: Props) {
       return;
     }
 
-    const images: PickedMedia[] = result.assets
-      .filter((a) => a.type !== 'video')
-      .map((a) => ({ uri: a.uri, kind: 'image', width: a.width, height: a.height }));
-    setPickedMedia((prev) => [...prev, ...images].slice(0, MAX_IMAGES));
-  }, [imageCount, pickedMedia]);
+    const asset = result.assets[0];
+    if (!asset || asset.type === 'video') return;
+    setPickedMedia([{ uri: asset.uri, kind: 'image', width: asset.width, height: asset.height }]);
+  }, [pickedMedia]);
 
   const removeMedia = useCallback((index: number) => {
     setPickedMedia((prev) => prev.filter((_, i) => i !== index));

@@ -118,6 +118,7 @@ export function CommentThreadScreen({ route, navigation }: Props) {
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState('');
+  const [sending, setSending] = useState(false);
   const [deletePostOpen, setDeletePostOpen] = useState(false);
 
   useEffect(() => {

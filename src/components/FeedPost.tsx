@@ -5,6 +5,7 @@ import { Avatar } from './Avatar';
 import { ConfirmDialog } from './ConfirmDialog';
 import { MediaCarousel } from './MediaCarousel';
 import { PostVideo } from './PostVideo';
+import { useAuthLanguage } from '../context/AuthLanguageContext';
 import { colors, spacing, typography } from '../theme';
 import { Post, PostMedia, UserProfile } from '../types';
 import { formatCount, formatRelativeTime, getLocation } from '../utils/format';
@@ -29,6 +30,7 @@ function FeedPostComponent({
   onComment,
   onDelete,
 }: FeedPostProps) {
+  const { strings } = useAuthLanguage();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const handleLike = useCallback(() => onLike(post.id), [onLike, post.id]);
   const handleComment = useCallback(() => onComment?.(post.id), [onComment, post.id]);
@@ -75,9 +77,9 @@ function FeedPostComponent({
                 </Pressable>
                 <ConfirmDialog
                   visible={deleteOpen}
-                  title="Delete post?"
-                  message="This permanently removes the post, comments, and media. This cannot be undone."
-                  confirmLabel="Delete post"
+                  title={strings.deletePostConfirm}
+                  confirmLabel={strings.deletePost}
+                  cancelLabel={strings.cancel}
                   destructive
                   onConfirm={handleDelete}
                   onCancel={() => setDeleteOpen(false)}

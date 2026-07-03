@@ -54,6 +54,7 @@ function CommentRow({
   currentUserId?: string;
   onDelete: (commentId: string) => void;
 }) {
+  const { strings } = useAuthLanguage();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const isOwner = currentUserId === comment.authorId;
 
@@ -85,9 +86,9 @@ function CommentRow({
               </Pressable>
               <ConfirmDialog
                 visible={deleteOpen}
-                title="Delete comment?"
-                message="This permanently removes the comment. This cannot be undone."
-                confirmLabel="Delete comment"
+                title={strings.deleteCommentConfirm}
+                confirmLabel={strings.deleteComment}
+                cancelLabel={strings.cancel}
                 destructive
                 onConfirm={handleDelete}
                 onCancel={() => setDeleteOpen(false)}
@@ -227,9 +228,9 @@ export function CommentThreadScreen({ route, navigation }: Props) {
                   </Pressable>
                   <ConfirmDialog
                     visible={deletePostOpen}
-                    title="Delete post?"
-                    message="This permanently removes the post, all comments, and media. This cannot be undone."
-                    confirmLabel="Delete post"
+                    title={strings.deletePostConfirm}
+                    confirmLabel={strings.deletePost}
+                    cancelLabel={strings.cancel}
                     destructive
                     onConfirm={handleDeletePost}
                     onCancel={() => setDeletePostOpen(false)}
@@ -247,7 +248,7 @@ export function CommentThreadScreen({ route, navigation }: Props) {
         <Text style={styles.commentsTitle}>{strings.comments}</Text>
       </View>
     );
-  }, [author, currentUser?.id, deletePostOpen, handleDeletePost, post, strings.comments]);
+  }, [author, currentUser?.id, deletePostOpen, handleDeletePost, post, strings]);
 
   return (
     <KeyboardAvoidingView

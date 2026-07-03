@@ -61,6 +61,9 @@ export type AuthStrings = {
   locationRequired: string;
   instrumentsRequired: string;
   usernameTaken: string;
+  emailTakenSignup: string;
+  emailSendFailed: string;
+  tooManyRequests: string;
   createAccountFailed: string;
   updateFailed: string;
   instrumentsPlayed: string;
@@ -83,6 +86,7 @@ export type AuthStrings = {
   repliedInThread: string;
   signOut: string;
   saveChanges: string;
+  cancel: string;
   memberSince: string;
   noPostsYet: string;
   appearance: string;
@@ -91,6 +95,10 @@ export type AuthStrings = {
   about: string;
   aboutDescription: string;
   language: string;
+  deletePostConfirm: string;
+  deletePost: string;
+  deleteCommentConfirm: string;
+  deleteComment: string;
 };
 
 const en: AuthStrings = {
@@ -154,6 +162,9 @@ const en: AuthStrings = {
   locationRequired: 'State and city are required.',
   instrumentsRequired: 'Select at least one instrument.',
   usernameTaken: 'That username is already taken.',
+  emailTakenSignup: 'An account with this email already exists. Try logging in instead.',
+  emailSendFailed: 'Could not send verification email. Please try again in a few minutes.',
+  tooManyRequests: 'Too many attempts. Please wait a few minutes and try again.',
   createAccountFailed: 'Could not create account.',
   updateFailed: 'Could not save changes. Please try again.',
   instrumentsPlayed: 'Instruments played',
@@ -176,6 +187,7 @@ const en: AuthStrings = {
   repliedInThread: 'also replied',
   signOut: 'Sign Out',
   saveChanges: 'Save changes',
+  cancel: 'Cancel',
   memberSince: 'Member since',
   noPostsYet: 'No posts yet.',
   appearance: 'Appearance',
@@ -185,6 +197,10 @@ const en: AuthStrings = {
   aboutDescription:
     'MLetras Connect — your account and profile are stored securely and sync across sessions.',
   language: 'Language',
+  deletePostConfirm: 'This will permanently remove this post. Are you sure?',
+  deletePost: 'Delete post',
+  deleteCommentConfirm: 'This will permanently remove this comment. Are you sure?',
+  deleteComment: 'Delete comment',
 };
 
 const es: AuthStrings = {
@@ -248,6 +264,9 @@ const es: AuthStrings = {
   locationRequired: 'El estado y la ciudad son obligatorios.',
   instrumentsRequired: 'Selecciona al menos un instrumento.',
   usernameTaken: 'Ese nombre de usuario ya está en uso.',
+  emailTakenSignup: 'Ya existe una cuenta con este correo. Intenta iniciar sesión.',
+  emailSendFailed: 'No se pudo enviar el correo de verificación. Inténtalo de nuevo en unos minutos.',
+  tooManyRequests: 'Demasiados intentos. Espera unos minutos e inténtalo de nuevo.',
   createAccountFailed: 'No se pudo crear la cuenta.',
   updateFailed: 'No se pudieron guardar los cambios. Inténtalo de nuevo.',
   instrumentsPlayed: 'Instrumentos que tocas',
@@ -270,6 +289,7 @@ const es: AuthStrings = {
   repliedInThread: 'también respondió',
   signOut: 'Cerrar sesión',
   saveChanges: 'Guardar cambios',
+  cancel: 'Cancelar',
   memberSince: 'Miembro desde',
   noPostsYet: 'Aún no hay publicaciones.',
   appearance: 'Apariencia',
@@ -279,6 +299,10 @@ const es: AuthStrings = {
   aboutDescription:
     'MLetras Connect — tu cuenta y perfil se guardan de forma segura y se sincronizan entre sesiones.',
   language: 'Idioma',
+  deletePostConfirm: 'Esto eliminará esta publicación de forma permanente. ¿Estás seguro?',
+  deletePost: 'Eliminar publicación',
+  deleteCommentConfirm: 'Esto eliminará este comentario de forma permanente. ¿Estás seguro?',
+  deleteComment: 'Eliminar comentario',
 };
 
 export const AUTH_STRINGS: Record<AuthLocale, AuthStrings> = { en, es };

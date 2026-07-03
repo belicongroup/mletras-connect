@@ -5,7 +5,7 @@ import { colors, layout, spacing, typography } from '../theme';
 interface ConfirmDialogProps {
   visible: boolean;
   title: string;
-  message: string;
+  message?: string;
   confirmLabel: string;
   cancelLabel?: string;
   destructive?: boolean;
@@ -31,7 +31,7 @@ function ConfirmDialogComponent({
         <View style={styles.dialog}>
           <View style={styles.content}>
             <Text style={styles.title}>{title}</Text>
-            <Text style={styles.message}>{message}</Text>
+            {message ? <Text style={styles.message}>{message}</Text> : null}
           </View>
           <Pressable
             accessibilityRole="button"

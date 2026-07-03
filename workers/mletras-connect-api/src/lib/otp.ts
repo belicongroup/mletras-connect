@@ -33,6 +33,9 @@ export async function storeOtp(
   code: string,
 ): Promise<void> {
   const record: OtpRecord = { code, attempts: 0 };
+  // Invalidate any prior verified state whenever a new code is issued so a
+  // resend forces the user to enter the newest code (fixes resend bypass).
+  await kv.delete(verifiedKey(flow, email));
   await kv.put(otpKey(flow, email), JSON.stringify(record), {
     expirationTtl: OTP_TTL_SECONDS,
   });

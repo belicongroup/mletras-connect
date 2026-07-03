@@ -9,7 +9,10 @@ CREATE TABLE IF NOT EXISTS users (
   state TEXT NOT NULL,
   city TEXT NOT NULL,
   instruments TEXT NOT NULL DEFAULT '[]',
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL,
+  updated_at TEXT,
+  token_version INTEGER NOT NULL DEFAULT 0,
+  posts_count INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_email ON users (email);

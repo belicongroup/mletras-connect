@@ -62,6 +62,7 @@ export type AuthStrings = {
   instrumentsRequired: string;
   usernameTaken: string;
   createAccountFailed: string;
+  updateFailed: string;
   instrumentsPlayed: string;
   countryUnitedStates: string;
   countryMexico: string;
@@ -145,6 +146,7 @@ const en: AuthStrings = {
   instrumentsRequired: 'Select at least one instrument.',
   usernameTaken: 'That username is already taken.',
   createAccountFailed: 'Could not create account.',
+  updateFailed: 'Could not save changes. Please try again.',
   instrumentsPlayed: 'Instruments played',
   countryUnitedStates: 'United States',
   countryMexico: 'Mexico',
@@ -163,7 +165,7 @@ const en: AuthStrings = {
   dark: 'Dark',
   about: 'About',
   aboutDescription:
-    'MLetras Connect — Phase 1 UI preview. All data is stored locally on your device.',
+    'MLetras Connect — your account and profile are stored securely and sync across sessions.',
   language: 'Language',
 };
 
@@ -229,6 +231,7 @@ const es: AuthStrings = {
   instrumentsRequired: 'Selecciona al menos un instrumento.',
   usernameTaken: 'Ese nombre de usuario ya está en uso.',
   createAccountFailed: 'No se pudo crear la cuenta.',
+  updateFailed: 'No se pudieron guardar los cambios. Inténtalo de nuevo.',
   instrumentsPlayed: 'Instrumentos que tocas',
   countryUnitedStates: 'Estados Unidos',
   countryMexico: 'México',
@@ -247,7 +250,7 @@ const es: AuthStrings = {
   dark: 'Oscuro',
   about: 'Acerca de',
   aboutDescription:
-    'MLetras Connect — Vista previa de la interfaz Fase 1. Todos los datos se guardan localmente en tu dispositivo.',
+    'MLetras Connect — tu cuenta y perfil se guardan de forma segura y se sincronizan entre sesiones.',
   language: 'Idioma',
 };
 

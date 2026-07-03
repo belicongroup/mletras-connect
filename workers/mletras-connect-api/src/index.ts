@@ -1,5 +1,6 @@
-import type { Env } from './routes/auth';
+import type { Env } from './lib/env';
 import { handleAuthRequest } from './routes/auth';
+import { handleUsersRequest } from './routes/users';
 import { errorResponse, handleOptions, jsonResponse } from './lib/cors';
 
 export default {
@@ -17,6 +18,11 @@ export default {
     if (path.startsWith('/auth')) {
       const authResponse = await handleAuthRequest(request, env, path);
       if (authResponse) return authResponse;
+    }
+
+    if (path.startsWith('/users')) {
+      const usersResponse = await handleUsersRequest(request, env, path);
+      if (usersResponse) return usersResponse;
     }
 
     return errorResponse(request, 'notFound', 404);

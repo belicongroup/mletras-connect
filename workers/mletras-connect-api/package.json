@@ -6,7 +6,9 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "db:migrate": "wrangler d1 execute mletras-connect-db --remote --file=./src/db/schema.sql",
-    "db:migrate:local": "wrangler d1 execute mletras-connect-db --local --file=./src/db/schema.sql"
+    "db:migrate:local": "wrangler d1 execute mletras-connect-db --local --file=./src/db/schema.sql",
+    "db:migrate:phase1": "wrangler d1 execute mletras-connect-db --remote --file=./src/db/migrations/0001_phase1_users.sql",
+    "db:migrate:phase1:local": "wrangler d1 execute mletras-connect-db --local --file=./src/db/migrations/0001_phase1_users.sql"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250320.0",

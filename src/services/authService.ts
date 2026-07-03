@@ -183,6 +183,34 @@ export async function resetPassword(
   });
 }
 
+export interface UpdateProfileInput {
+  firstName?: string;
+  lastName?: string;
+  country: string;
+  state: string;
+  city: string;
+  instruments: Instrument[];
+}
+
+export async function updateProfile(
+  input: UpdateProfileInput,
+): Promise<ApiResult<UserProfile>> {
+  const result = await request<{ user: ApiUser }>(
+    '/users/me',
+    {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    },
+    true,
+  );
+
+  if (!result.ok || !result.data) {
+    return { ok: false, error: result.error };
+  }
+
+  return { ok: true, data: mapUser(result.data.user) };
+}
+
 export async function getCurrentUser(): Promise<ApiResult<UserProfile>> {
   const result = await request<{ user: ApiUser }>('/auth/me', { method: 'GET' }, true);
 

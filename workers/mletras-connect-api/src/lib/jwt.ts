@@ -1,7 +1,8 @@
-interface JwtPayload {
+export interface JwtPayload {
   sub: string;
   email: string;
   username: string;
+  tv?: number;
   exp: number;
 }
 

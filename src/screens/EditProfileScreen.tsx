@@ -100,7 +100,7 @@ export function EditProfileScreen({ navigation }: Props) {
     const resolvedState = isOtherCountry ? customState.trim() : getStateLabel(country, stateCode);
     const resolvedCity = isOtherCountry ? customCity.trim() : cityCode;
 
-    await updateProfile({
+    const result = await updateProfile({
       firstName: firstName.trim() || undefined,
       lastName: lastName.trim() || undefined,
       country: getCountryLabel(country),
@@ -110,6 +110,12 @@ export function EditProfileScreen({ navigation }: Props) {
     });
 
     setLoading(false);
+
+    if (!result.ok) {
+      setError(strings.updateFailed);
+      return;
+    }
+
     navigation.goBack();
   };
 

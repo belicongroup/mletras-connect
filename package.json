@@ -34,7 +34,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "web:build": "expo export -p web",
-    "web:deploy": "expo export -p web && wrangler pages deploy dist --project-name mletras-connect --commit-dirty=true",
+    "web:deploy": "expo export -p web && npx wrangler pages deploy dist --project-name mletras-connect --commit-dirty=true",
     "worker:dev": "npm run dev --prefix workers/mletras-connect-api",
     "worker:dev:test": "npm run dev:test --prefix workers/mletras-connect-api",
     "worker:deploy": "npm run deploy --prefix workers/mletras-connect-api",

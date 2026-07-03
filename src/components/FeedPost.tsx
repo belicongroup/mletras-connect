@@ -14,6 +14,8 @@ interface FeedPostProps {
   post: Post;
   author: UserProfile;
   currentUserId?: string;
+  /** True when this post's video is scrolled into view (drives autoplay). */
+  isVideoActive?: boolean;
   onLike: (postId: string) => void;
   onComment?: (postId: string) => void;
   onDelete?: (postId: string) => void;
@@ -23,6 +25,7 @@ function FeedPostComponent({
   post,
   author,
   currentUserId,
+  isVideoActive,
   onLike,
   onComment,
   onDelete,
@@ -73,7 +76,7 @@ function FeedPostComponent({
           <Text style={styles.text}>{post.text}</Text>
 
           {video ? (
-            <PostVideo media={video} />
+            <PostVideo media={video} isActive={isVideoActive} />
           ) : images.length > 0 ? (
             <MediaCarousel media={images} />
           ) : null}

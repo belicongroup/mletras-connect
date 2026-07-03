@@ -52,6 +52,7 @@ export function FeedScreen({ navigation }: Props) {
   const { strings } = useAuthLanguage();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
   const [composerOpen, setComposerOpen] = useState(false);
   const [composerText, setComposerText] = useState('');
   const [pickedMedia, setPickedMedia] = useState<PickedMedia[]>([]);
@@ -230,16 +231,28 @@ export function FeedScreen({ navigation }: Props) {
           post={item}
           author={author}
           currentUserId={currentUser?.id}
+          isVideoActive={item.id === activeVideoId}
           onLike={toggleLike}
           onComment={handleComment}
           onDelete={handleDeletePost}
         />
       );
     },
-    [currentUser?.id, handleComment, handleDeletePost, toggleLike, users],
+    [activeVideoId, currentUser?.id, handleComment, handleDeletePost, toggleLike, users],
   );
 
   const keyExtractor = useCallback((item: Post) => item.id, []);
+
+  // Autoplay the top-most video that is meaningfully on screen (X-style).
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
+  const handleViewableItemsChanged = useRef(
+    ({ viewableItems }: { viewableItems: Array<{ item: Post }> }) => {
+      const withVideo = viewableItems.find(({ item }) =>
+        item.media?.some((m) => m.type === 'video'),
+      );
+      setActiveVideoId(withVideo ? withVideo.item.id : null);
+    },
+  ).current;
 
   const renderFooter = useCallback(() => {
     if (!feedLoadingMore) return null;
@@ -284,6 +297,8 @@ export function FeedScreen({ navigation }: Props) {
           }
           onScroll={onScroll}
           scrollEventThrottle={16}
+          viewabilityConfig={viewabilityConfig}
+          onViewableItemsChanged={handleViewableItemsChanged}
           onEndReached={feedHasMore ? loadMoreFeed : undefined}
           onEndReachedThreshold={0.5}
           ListHeaderComponent={renderListHeader}

@@ -1,13 +1,16 @@
-import React, { memo, useState } from 'react';
+import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { VideoView, useVideoPlayer } from 'expo-video';
+import { useEventListener } from 'expo';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography } from '../theme';
 import type { PostMedia } from '../types';
 
 interface PostVideoProps {
   media: PostMedia;
+  /** True when this is the video currently scrolled into view; drives autoplay. */
+  isActive?: boolean;
 }
 
 // X-style uniform framing: every video sits in a consistent card regardless of
@@ -23,19 +26,44 @@ function clampAspect(width?: number, height?: number): number {
 }
 
 /**
- * Inline HLS video with poster-first playback. The player is only given a
- * source once the user taps play, so idle feed items stay cheap.
+ * Inline feed video with X-style behavior: autoplays muted + looping while in
+ * view, exposes a mute toggle, and expands to fullscreen (with sound) on tap.
  */
-function PostVideoComponent({ media }: PostVideoProps) {
-  const [active, setActive] = useState(false);
-  const aspectRatio = clampAspect(media.width, media.height);
+function PostVideoComponent({ media, isActive = false }: PostVideoProps) {
+  const ref = useRef<VideoView>(null);
+  const [muted, setMuted] = useState(true);
+  const [isPlaying, setIsPlaying] = useState(false);
 
-  const player = useVideoPlayer(active ? media.hlsUrl ?? media.url : null, (p) => {
-    p.loop = false;
-    p.play();
+  const isReady = media.processingStatus === 'ready';
+  const aspectRatio = clampAspect(media.width, media.height);
+  const source = isReady ? media.hlsUrl ?? media.url : null;
+
+  const player = useVideoPlayer(source, (p) => {
+    p.loop = true;
+    p.muted = true;
   });
 
-  if (media.processingStatus !== 'ready') {
+  useEventListener(player, 'playingChange', ({ isPlaying: playing }) => setIsPlaying(playing));
+  useEventListener(player, 'mutedChange', ({ muted: value }) => setMuted(value));
+
+  // Autoplay only the in-view video; pause the rest so we never stack audio or
+  // burn bandwidth on off-screen clips.
+  useEffect(() => {
+    if (!isReady) return;
+    if (isActive) player.play();
+    else player.pause();
+  }, [isActive, isReady, player]);
+
+  useEffect(() => {
+    player.muted = muted;
+  }, [muted, player]);
+
+  const toggleMute = useCallback(() => setMuted((prev) => !prev), []);
+  const openFullscreen = useCallback(() => {
+    ref.current?.enterFullscreen();
+  }, []);
+
+  if (!isReady) {
     return (
       <View style={[styles.container, { aspectRatio }]}>
         {media.posterUrl ? (
@@ -51,28 +79,46 @@ function PostVideoComponent({ media }: PostVideoProps) {
     );
   }
 
-  if (!active) {
-    return (
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Play video"
-        style={[styles.container, { aspectRatio }]}
-        onPress={() => setActive(true)}
-      >
-        {media.posterUrl ? (
-          <Image style={styles.poster} source={{ uri: media.posterUrl }} contentFit="contain" />
-        ) : null}
-        <View style={styles.playButton}>
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Expand video"
+      style={[styles.container, { aspectRatio }]}
+      onPress={openFullscreen}
+    >
+      <VideoView
+        ref={ref}
+        style={styles.poster}
+        player={player}
+        contentFit="contain"
+        nativeControls={false}
+        playsInline
+        fullscreenOptions={{ enable: true }}
+        onFullscreenEnter={() => setMuted(false)}
+        onFullscreenExit={() => setMuted(true)}
+      />
+
+      {/* Poster shows until the first frame renders (or while paused off-screen). */}
+      {!isPlaying && media.posterUrl ? (
+        <Image style={styles.poster} source={{ uri: media.posterUrl }} contentFit="contain" />
+      ) : null}
+
+      {!isPlaying ? (
+        <View pointerEvents="none" style={styles.playButton}>
           <Ionicons name="play" size={28} color="#FFFFFF" />
         </View>
-      </Pressable>
-    );
-  }
+      ) : null}
 
-  return (
-    <View style={[styles.container, { aspectRatio }]}>
-      <VideoView style={styles.poster} player={player} contentFit="contain" nativeControls />
-    </View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={muted ? 'Unmute video' : 'Mute video'}
+        style={styles.muteButton}
+        hitSlop={10}
+        onPress={toggleMute}
+      >
+        <Ionicons name={muted ? 'volume-mute' : 'volume-high'} size={18} color="#FFFFFF" />
+      </Pressable>
+    </Pressable>
   );
 }
 
@@ -118,6 +164,17 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
+    backgroundColor: colors.overlay,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  muteButton: {
+    position: 'absolute',
+    right: spacing.sm,
+    bottom: spacing.sm,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',

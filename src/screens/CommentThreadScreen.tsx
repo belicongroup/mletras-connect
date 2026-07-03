@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -16,6 +16,8 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '../components/Avatar';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { LinkedPostText } from '../components/LinkedPostText';
+import { SocialLinkEmbed } from '../components/SocialLinkEmbed';
 import { useApp } from '../context/AppContext';
 import { useAuthLanguage } from '../context/AuthLanguageContext';
 import { createComment, deleteComment, getComments } from '../services/commentsService';
@@ -23,6 +25,7 @@ import { getPost } from '../services/postsService';
 import { Comment, Post, RootStackParamList, UserProfile } from '../types';
 import { colors, layout, spacing, typography } from '../theme';
 import { formatRelativeTime, getLocation } from '../utils/format';
+import { extractSocialLinks } from '../utils/socialLinks';
 import { showAlert } from '../utils/alert';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CommentThread'>;
@@ -96,7 +99,7 @@ function CommentRow({
             </>
           ) : null}
         </View>
-        <Text style={styles.commentText}>{comment.text}</Text>
+        <LinkedPostText text={comment.text} style={styles.commentText} />
       </View>
     </View>
   );
@@ -201,6 +204,15 @@ export function CommentThreadScreen({ route, navigation }: Props) {
 
   const data = flatten(comments);
 
+  const postSocialLink = useMemo(() => {
+    if (!post?.text) return null;
+    const hasNativeMedia = Boolean(
+      post.imageUrl || post.media?.some((m) => m.type === 'image' || m.type === 'video'),
+    );
+    if (hasNativeMedia) return null;
+    return extractSocialLinks(post.text)[0] ?? null;
+  }, [post]);
+
   const renderHeader = useCallback(() => {
     if (!post || !author) return null;
     const isOwner = currentUser?.id === post.authorId;
@@ -239,7 +251,8 @@ export function CommentThreadScreen({ route, navigation }: Props) {
               ) : null}
             </View>
             <Text style={styles.location}>{getLocation(author.city, author.state)}</Text>
-            {post.text ? <Text style={styles.postText}>{post.text}</Text> : null}
+            {post.text ? <LinkedPostText text={post.text} style={styles.postText} /> : null}
+            {postSocialLink ? <SocialLinkEmbed link={postSocialLink} /> : null}
             {post.imageUrl ? (
               <Image style={styles.media} source={{ uri: post.imageUrl }} contentFit="cover" />
             ) : null}
@@ -248,7 +261,7 @@ export function CommentThreadScreen({ route, navigation }: Props) {
         <Text style={styles.commentsTitle}>{strings.comments}</Text>
       </View>
     );
-  }, [author, currentUser?.id, deletePostOpen, handleDeletePost, post, strings]);
+  }, [author, currentUser?.id, deletePostOpen, handleDeletePost, post, postSocialLink, strings]);
 
   return (
     <KeyboardAvoidingView

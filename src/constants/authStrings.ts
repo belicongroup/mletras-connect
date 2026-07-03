@@ -99,6 +99,10 @@ export type AuthStrings = {
   deletePost: string;
   deleteCommentConfirm: string;
   deleteComment: string;
+  socialVideoTikTok: string;
+  socialVideoInstagram: string;
+  socialVideoFacebook: string;
+  openSocialLink: string;
 };
 
 const en: AuthStrings = {
@@ -201,6 +205,10 @@ const en: AuthStrings = {
   deletePost: 'Delete post',
   deleteCommentConfirm: 'This will permanently remove this comment. Are you sure?',
   deleteComment: 'Delete comment',
+  socialVideoTikTok: 'TikTok video',
+  socialVideoInstagram: 'Instagram video',
+  socialVideoFacebook: 'Facebook video',
+  openSocialLink: 'Tap to open',
 };
 
 const es: AuthStrings = {
@@ -303,6 +311,10 @@ const es: AuthStrings = {
   deletePost: 'Eliminar publicación',
   deleteCommentConfirm: 'Esto eliminará este comentario de forma permanente. ¿Estás seguro?',
   deleteComment: 'Eliminar comentario',
+  socialVideoTikTok: 'Video de TikTok',
+  socialVideoInstagram: 'Video de Instagram',
+  socialVideoFacebook: 'Video de Facebook',
+  openSocialLink: 'Toca para abrir',
 };
 
 export const AUTH_STRINGS: Record<AuthLocale, AuthStrings> = { en, es };

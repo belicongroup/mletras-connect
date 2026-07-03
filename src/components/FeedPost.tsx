@@ -3,12 +3,15 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from './Avatar';
 import { ConfirmDialog } from './ConfirmDialog';
+import { LinkedPostText } from './LinkedPostText';
 import { MediaCarousel } from './MediaCarousel';
 import { PostVideo } from './PostVideo';
+import { SocialLinkEmbed } from './SocialLinkEmbed';
 import { useAuthLanguage } from '../context/AuthLanguageContext';
 import { colors, spacing, typography } from '../theme';
 import { Post, PostMedia, UserProfile } from '../types';
 import { formatCount, formatRelativeTime, getLocation } from '../utils/format';
+import { extractSocialLinks } from '../utils/socialLinks';
 
 interface FeedPostProps {
   post: Post;
@@ -52,6 +55,10 @@ function FeedPostComponent({
 
   const video = media.find((m) => m.type === 'video');
   const images = media.filter((m) => m.type === 'image');
+  const socialLink = useMemo(() => {
+    if (video) return null;
+    return extractSocialLinks(post.text)[0] ?? null;
+  }, [post.text, video]);
 
   return (
     <View style={styles.container}>
@@ -88,7 +95,8 @@ function FeedPostComponent({
             ) : null}
           </View>
           <Text style={styles.location}>{getLocation(author.city, author.state)}</Text>
-          <Text style={styles.text}>{post.text}</Text>
+          {post.text ? <LinkedPostText text={post.text} style={styles.text} /> : null}
+          {socialLink ? <SocialLinkEmbed link={socialLink} /> : null}
 
           {video ? (
             <PostVideo media={video} isActive={isVideoActive} />

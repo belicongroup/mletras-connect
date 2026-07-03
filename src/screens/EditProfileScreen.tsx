@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '../components/Button';
 import { InstrumentChecklist } from '../components/InstrumentChecklist';
 import { LocationFields } from '../components/LocationFields';
+import { ScreenHeader } from '../components/ScreenHeader';
 import { TextField } from '../components/TextField';
 import {
   CountryCode,
@@ -126,9 +127,7 @@ export function EditProfileScreen({ navigation }: Props) {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={[styles.container, { paddingTop: insets.top }]}
     >
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>{strings.editProfile}</Text>
-      </View>
+      <ScreenHeader title={strings.editProfile} onBack={() => navigation.goBack()} />
 
       <ScrollView
         contentContainerStyle={[
@@ -177,6 +176,14 @@ export function EditProfileScreen({ navigation }: Props) {
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
         <Button label={strings.saveChanges} onPress={handleSave} loading={loading} fullWidth />
+        <Button
+          label={strings.cancel}
+          variant="outline"
+          onPress={() => navigation.goBack()}
+          disabled={loading}
+          fullWidth
+          style={styles.cancelButton}
+        />
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -187,18 +194,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  header: {
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  headerTitle: {
-    ...typography.heading,
-    color: colors.text,
-    textAlign: 'center',
-  },
   content: {
     padding: spacing.xxl,
     paddingBottom: spacing.xxl,
@@ -207,5 +202,8 @@ const styles = StyleSheet.create({
     ...typography.small,
     color: colors.danger,
     marginBottom: spacing.lg,
+  },
+  cancelButton: {
+    marginTop: spacing.md,
   },
 });

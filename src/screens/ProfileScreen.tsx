@@ -4,6 +4,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '../components/Avatar';
 import { FeedPost } from '../components/FeedPost';
+import { ScreenHeader } from '../components/ScreenHeader';
 import { useApp } from '../context/AppContext';
 import { useAuthLanguage } from '../context/AuthLanguageContext';
 import { buildProfileSummary } from '../services/profileService';
@@ -70,9 +71,7 @@ export function ProfileScreen({ navigation }: Props) {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>{strings.profile}</Text>
-      </View>
+      <ScreenHeader title={strings.profile} onBack={() => navigation.goBack()} />
 
       <View style={[styles.content, { maxWidth: layout.maxContentWidth, alignSelf: 'center', width: '100%' }]}>
         <View style={styles.profile}>
@@ -85,6 +84,8 @@ export function ProfileScreen({ navigation }: Props) {
             {strings.memberSince} {summary.memberSince}
           </Text>
         </View>
+
+        <Text style={styles.postsTitle}>{strings.yourPosts}</Text>
 
         <FlatList
           data={userPosts}
@@ -115,21 +116,17 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  header: {
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  headerTitle: {
-    ...typography.heading,
-    color: colors.text,
-    textAlign: 'center',
-  },
   content: { flex: 1 },
   profile: {
     padding: spacing.lg,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  postsTitle: {
+    ...typography.heading,
+    color: colors.text,
+    textAlign: 'center',
+    paddingVertical: spacing.lg,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },

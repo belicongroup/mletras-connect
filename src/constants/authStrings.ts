@@ -103,6 +103,7 @@ export type AuthStrings = {
   socialVideoInstagram: string;
   socialVideoFacebook: string;
   openSocialLink: string;
+  yourPosts: string;
 };
 
 const en: AuthStrings = {
@@ -209,6 +210,7 @@ const en: AuthStrings = {
   socialVideoInstagram: 'Instagram video',
   socialVideoFacebook: 'Facebook video',
   openSocialLink: 'Tap to open',
+  yourPosts: 'Your posts',
 };
 
 const es: AuthStrings = {
@@ -315,6 +317,7 @@ const es: AuthStrings = {
   socialVideoInstagram: 'Video de Instagram',
   socialVideoFacebook: 'Video de Facebook',
   openSocialLink: 'Toca para abrir',
+  yourPosts: 'Tus publicaciones',
 };
 
 export const AUTH_STRINGS: Record<AuthLocale, AuthStrings> = { en, es };

@@ -17,13 +17,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '../components/Avatar';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { LinkedPostText } from '../components/LinkedPostText';
+import { ScreenHeader } from '../components/ScreenHeader';
 import { SocialLinkEmbed } from '../components/SocialLinkEmbed';
 import { useApp } from '../context/AppContext';
 import { useAuthLanguage } from '../context/AuthLanguageContext';
 import { createComment, deleteComment, getComments } from '../services/commentsService';
 import { getPost } from '../services/postsService';
 import { Comment, Post, RootStackParamList, UserProfile } from '../types';
-import { colors, layout, spacing, typography } from '../theme';
+import { colors, spacing, typography } from '../theme';
 import { formatRelativeTime, getLocation } from '../utils/format';
 import { extractSocialLinks } from '../utils/socialLinks';
 import { showAlert } from '../utils/alert';
@@ -270,19 +271,7 @@ export function CommentThreadScreen({ route, navigation }: Props) {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={insets.top}
     >
-      <View style={styles.header}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          onPress={() => navigation.goBack()}
-          hitSlop={8}
-          style={styles.backBtn}
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </Pressable>
-        <Text style={styles.headerTitle}>{strings.comments}</Text>
-        <View style={styles.backBtn} />
-      </View>
+      <ScreenHeader title={strings.comments} onBack={() => navigation.goBack()} />
 
       {loading ? (
         <ActivityIndicator style={styles.loading} color={colors.primary} />
@@ -339,25 +328,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  backBtn: {
-    width: layout.avatarSm,
-    height: layout.avatarSm,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    ...typography.heading,
-    color: colors.text,
   },
   loading: {
     padding: spacing.xxl,

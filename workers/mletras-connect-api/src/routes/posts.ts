@@ -295,6 +295,22 @@ const FEED_COLUMNS = `
   u.instruments, u.created_at AS author_created_at
 `;
 
+/** Posts with a video still transcoding are visible only to their author. */
+const PUBLIC_FEED_VISIBLE = `(p.author_id = ? OR NOT EXISTS (
+  SELECT 1 FROM post_media pm
+  WHERE pm.post_id = p.id AND pm.type = 'video' AND pm.processing_status = 'pending'
+))`;
+
+async function postHasPendingVideo(env: Env, postId: string): Promise<boolean> {
+  const row = await env.DB.prepare(
+    `SELECT 1 FROM post_media
+     WHERE post_id = ? AND type = 'video' AND processing_status = 'pending' LIMIT 1`,
+  )
+    .bind(postId)
+    .first();
+  return Boolean(row);
+}
+
 async function getFeedPage(
   request: Request,
   env: Env,
@@ -314,6 +330,9 @@ async function getFeedPage(
   if (authorId) {
     conditions.push('p.author_id = ?');
     binds.push(authorId);
+  } else {
+    conditions.push(PUBLIC_FEED_VISIBLE);
+    binds.push(auth.payload.sub);
   }
   if (cursor) {
     conditions.push('(p.created_at < ? OR (p.created_at = ? AND p.id < ?))');
@@ -483,6 +502,13 @@ export async function handlePostsRequest(
         .first<PostRow>();
 
       if (!row) return errorResponse(request, 'notFound', 404);
+
+      if (
+        row.author_id !== auth.payload.sub &&
+        (await postHasPendingVideo(env, postId))
+      ) {
+        return errorResponse(request, 'notFound', 404);
+      }
 
       const [post] = await hydratePosts(env, [row], auth.payload.sub);
       return jsonResponse(request, { ok: true, post });

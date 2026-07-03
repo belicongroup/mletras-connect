@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -49,6 +49,7 @@ export function FeedScreen({ navigation }: Props) {
     feedLoadingMore,
     feedHasMore,
     refreshFeed,
+    refreshPost,
     loadMoreFeed,
     unreadCount,
   } = useApp();
@@ -63,6 +64,8 @@ export function FeedScreen({ navigation }: Props) {
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const slideAnim = useRef(new Animated.Value(-280)).current;
+  const postsRef = useRef(posts);
+  postsRef.current = posts;
   const { headerOffset, headerHeight, onHeaderLayout, onScroll } = useCollapsingHeader();
 
   const handleRefresh = useCallback(() => {
@@ -160,9 +163,9 @@ export function FeedScreen({ navigation }: Props) {
     [],
   );
 
-  /** After a video post, poll until Stream finishes transcoding, then refresh. */
+  /** After a video post, poll until Stream finishes transcoding, then refresh that post. */
   const pollVideos = useCallback(
-    (uploaded: UploadedMedia[]) => {
+    (uploaded: UploadedMedia[], postId: string) => {
       const videos = uploaded.filter((u) => u.type === 'video');
       if (videos.length === 0) return;
       let attempts = 0;
@@ -170,15 +173,34 @@ export function FeedScreen({ navigation }: Props) {
         attempts += 1;
         const statuses = await Promise.all(videos.map((v) => getMediaStatus(v.mediaAssetId)));
         if (statuses.every((s) => s?.processingStatus === 'ready')) {
-          refreshFeed({ silent: true });
+          await refreshPost(postId);
           return;
         }
         if (attempts < VIDEO_POLL_MAX_ATTEMPTS) setTimeout(tick, VIDEO_POLL_INTERVAL_MS);
       };
       setTimeout(tick, VIDEO_POLL_INTERVAL_MS);
     },
-    [refreshFeed],
+    [refreshPost],
   );
+
+  // Keep the uploader's pending video posts in sync without a full page reload.
+  useEffect(() => {
+    if (!currentUser) return;
+    const interval = setInterval(() => {
+      const pendingIds = postsRef.current
+        .filter(
+          (post) =>
+            post.authorId === currentUser.id &&
+            post.media?.some(
+              (media) => media.type === 'video' && media.processingStatus === 'pending',
+            ),
+        )
+        .map((post) => post.id);
+      if (pendingIds.length === 0) return;
+      void Promise.all(pendingIds.map((id) => refreshPost(id)));
+    }, VIDEO_POLL_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [currentUser, refreshPost]);
 
   const handleSubmitPost = useCallback(async () => {
     if ((!composerText.trim() && pickedMedia.length === 0) || submitting) return;
@@ -204,8 +226,8 @@ export function FeedScreen({ navigation }: Props) {
     setSubmitting(false);
     setUploadProgress(null);
 
-    if (result.ok) {
-      pollVideos(uploaded);
+    if (result.ok && result.postId) {
+      pollVideos(uploaded, result.postId);
       closeComposer();
     } else {
       const message = 'Your post could not be published. Please try again.';

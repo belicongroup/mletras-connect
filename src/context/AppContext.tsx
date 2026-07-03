@@ -58,10 +58,11 @@ interface AppContextValue {
   signUp: (input: SignUpInput) => Promise<{ ok: boolean; error?: string }>;
   signOut: () => Promise<void>;
   updateProfile: (data: Partial<SignUpInput>) => Promise<{ ok: boolean; error?: string }>;
-  addPost: (input: CreatePostInput) => Promise<{ ok: boolean; error?: string }>;
+  addPost: (input: CreatePostInput) => Promise<{ ok: boolean; error?: string; postId?: string }>;
   removePost: (postId: string) => Promise<{ ok: boolean; error?: string }>;
   toggleLike: (postId: string) => void;
   refreshFeed: (options?: RefreshFeedOptions) => Promise<void>;
+  refreshPost: (postId: string) => Promise<void>;
   loadMoreFeed: () => Promise<void>;
   unreadCount: number;
   refreshUnreadCount: () => Promise<void>;
@@ -86,6 +87,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const cursorRef = useRef<string | null>(null);
   const loadingRef = useRef(false);
   const feedRefreshInFlight = useRef(false);
+  const pendingFeedRefresh = useRef<RefreshFeedOptions | undefined>(undefined);
 
   const refreshUnreadCount = useCallback(async () => {
     const count = await notificationsService.getUnreadCount();
@@ -115,7 +117,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const refreshFeed = useCallback(async (options?: RefreshFeedOptions) => {
-    if (feedRefreshInFlight.current) return;
+    if (feedRefreshInFlight.current) {
+      pendingFeedRefresh.current = options;
+      return;
+    }
     feedRefreshInFlight.current = true;
     const silent = options?.silent ?? false;
     if (!silent) setFeedRefreshing(true);
@@ -128,8 +133,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } finally {
       if (!silent) setFeedRefreshing(false);
       feedRefreshInFlight.current = false;
+      const pending = pendingFeedRefresh.current;
+      pendingFeedRefresh.current = undefined;
+      if (pending) void refreshFeed(pending);
     }
   }, [mergeAuthors]);
+
+  const refreshPost = useCallback(async (postId: string) => {
+    const result = await postsService.getPost(postId);
+    if (!result) return;
+    setUsers((prev) => ({ ...prev, [result.author.id]: result.author }));
+    setPosts((prev) => {
+      const index = prev.findIndex((post) => post.id === postId);
+      if (index === -1) return prev;
+      const next = [...prev];
+      next[index] = result.post;
+      return next;
+    });
+  }, []);
 
   const loadMoreFeed = useCallback(async () => {
     if (loadingRef.current || !cursorRef.current) return;
@@ -319,7 +340,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       setUsers((prev) => ({ ...prev, [created.author.id]: created.author }));
       setPosts((prev) => [created.post, ...prev]);
-      return { ok: true };
+      return { ok: true, postId: created.post.id };
     },
     [currentUser],
   );
@@ -400,6 +421,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       removePost,
       toggleLike,
       refreshFeed,
+      refreshPost,
       loadMoreFeed,
       unreadCount,
       refreshUnreadCount,
@@ -423,6 +445,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       removePost,
       toggleLike,
       refreshFeed,
+      refreshPost,
       loadMoreFeed,
       unreadCount,
       refreshUnreadCount,

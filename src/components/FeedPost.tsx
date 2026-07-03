@@ -99,7 +99,11 @@ function FeedPostComponent({
           {socialLink ? <SocialLinkEmbed link={socialLink} /> : null}
 
           {video ? (
-            <PostVideo media={video} isActive={isVideoActive} />
+            <PostVideo
+              key={`${post.id}-${video.processingStatus}`}
+              media={video}
+              isActive={isVideoActive}
+            />
           ) : images.length > 0 ? (
             <MediaCarousel media={images} />
           ) : null}

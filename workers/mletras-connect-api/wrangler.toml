@@ -24,10 +24,10 @@ crons = ["0 4 * * *"]
 FROM_EMAIL = "MLetras Connect <connect@mletras.com>"
 # Media pipeline configuration. Non-secret values live here; tokens are set via
 # `wrangler secret put` (CF_IMAGES_TOKEN, CF_STREAM_TOKEN, CF_STREAM_WEBHOOK_SECRET).
-# Leave these blank to keep the raw-R2 fallback path active.
-# CF_ACCOUNT_ID = ""
+CF_ACCOUNT_ID = "753baa267ae1389233faac44bb79e07a"
+CF_STREAM_CUSTOMER_CODE = "18toxg99d1ot8bjm"
+# Cloudflare Images not enabled; photos fall back to R2 delivery.
 # CF_IMAGES_HASH = ""
-# CF_STREAM_CUSTOMER_CODE = ""
 # MEDIA_CDN_URL = "https://media.mletras.com"
 
 [[routes]]

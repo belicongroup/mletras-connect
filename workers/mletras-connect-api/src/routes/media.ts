@@ -13,7 +13,12 @@ import {
 } from '../lib/cfStream';
 import { corsHeaders, errorResponse, jsonResponse } from '../lib/cors';
 import type { Env } from '../lib/env';
-import { serializePostMedia, type MediaProvider, type PostMediaRow } from '../lib/media';
+import {
+  serializePostMedia,
+  type MediaProvider,
+  type PostMediaRow,
+  type ProcessingStatus,
+} from '../lib/media';
 import {
   MAX_IMAGE_BYTES,
   MAX_IMAGE_DIMENSION,
@@ -74,6 +79,38 @@ async function insertMediaAsset(env: Env, a: MediaAssetInsert): Promise<void> {
       new Date().toISOString(),
     )
     .run();
+}
+
+/**
+ * Propagates a Stream asset's processing result to BOTH the canonical
+ * `media_assets` row and every `post_media` row that already references it.
+ *
+ * Posts are usually created while the video is still transcoding, so their
+ * `post_media` snapshot starts as `pending`. Without this second update the
+ * feed (which reads status/dimensions from `post_media`) would stay stuck on
+ * "Processing" forever even after Stream finishes. Both writes run in one batch
+ * so the two tables never diverge.
+ */
+async function syncStreamStatus(
+  env: Env,
+  uid: string,
+  fields: {
+    status: ProcessingStatus;
+    width: number | null;
+    height: number | null;
+    durationMs: number | null;
+  },
+): Promise<void> {
+  await env.DB.batch([
+    env.DB.prepare(
+      `UPDATE media_assets SET processing_status = ?, width = ?, height = ?, duration_ms = ?
+       WHERE provider = 'cf_stream' AND provider_id = ?`,
+    ).bind(fields.status, fields.width, fields.height, fields.durationMs, uid),
+    env.DB.prepare(
+      `UPDATE post_media SET processing_status = ?, width = ?, height = ?, duration_ms = ?
+       WHERE provider = 'cf_stream' AND provider_id = ?`,
+    ).bind(fields.status, fields.width, fields.height, fields.durationMs, uid),
+  ]);
 }
 
 /** Serializes a media_assets row into the upload response the client attaches. */
@@ -322,17 +359,22 @@ async function handleStatus(request: Request, env: Env, assetId: string): Promis
   if (row.kind === 'video' && row.processing_status === 'pending' && streamEnabled(env)) {
     const { getStreamVideo } = await import('../lib/cfStream');
     const status = await getStreamVideo(env, row.provider_id);
-    if (status?.ready) {
-      const durationMs = status.durationSeconds ? Math.round(status.durationSeconds * 1000) : null;
-      await env.DB.prepare(
-        `UPDATE media_assets SET processing_status = 'ready', width = ?, height = ?, duration_ms = ? WHERE id = ?`,
-      )
-        .bind(status.width, status.height, durationMs, row.id)
-        .run();
-      row.processing_status = 'ready';
-      row.width = status.width;
-      row.height = status.height;
-      row.duration_ms = durationMs;
+    const failed = status?.state === 'error';
+    if (status?.ready || failed) {
+      const nextStatus: ProcessingStatus = failed ? 'failed' : 'ready';
+      const durationMs = status?.durationSeconds
+        ? Math.round(status.durationSeconds * 1000)
+        : null;
+      await syncStreamStatus(env, row.provider_id, {
+        status: nextStatus,
+        width: status?.width ?? null,
+        height: status?.height ?? null,
+        durationMs,
+      });
+      row.processing_status = nextStatus;
+      row.width = status?.width ?? row.width;
+      row.height = status?.height ?? row.height;
+      row.duration_ms = durationMs ?? row.duration_ms;
     }
   }
 
@@ -359,15 +401,15 @@ async function handleStreamWebhook(request: Request, env: Env): Promise<Response
 
   const ready = Boolean(payload.readyToStream);
   const failed = payload.status?.state === 'error';
-  const status = ready ? 'ready' : failed ? 'failed' : 'pending';
+  const status: ProcessingStatus = ready ? 'ready' : failed ? 'failed' : 'pending';
   const durationMs = payload.duration ? Math.round(payload.duration * 1000) : null;
 
-  await env.DB.prepare(
-    `UPDATE media_assets SET processing_status = ?, width = ?, height = ?, duration_ms = ?
-     WHERE provider = 'cf_stream' AND provider_id = ?`,
-  )
-    .bind(status, payload.input?.width ?? null, payload.input?.height ?? null, durationMs, payload.uid)
-    .run();
+  await syncStreamStatus(env, payload.uid, {
+    status,
+    width: payload.input?.width ?? null,
+    height: payload.input?.height ?? null,
+    durationMs,
+  });
 
   return jsonResponse(request, { ok: true });
 }

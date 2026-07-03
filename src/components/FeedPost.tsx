@@ -1,14 +1,13 @@
-import React, { memo, useCallback, useMemo } from 'react';
+import React, { memo, useCallback, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from './Avatar';
+import { ConfirmDialog } from './ConfirmDialog';
 import { MediaCarousel } from './MediaCarousel';
-import { OptionsMenu } from './OptionsMenu';
 import { PostVideo } from './PostVideo';
 import { colors, spacing, typography } from '../theme';
 import { Post, PostMedia, UserProfile } from '../types';
 import { formatCount, formatRelativeTime, getLocation } from '../utils/format';
-import { confirmAction } from '../utils/alert';
 
 interface FeedPostProps {
   post: Post;
@@ -30,16 +29,14 @@ function FeedPostComponent({
   onComment,
   onDelete,
 }: FeedPostProps) {
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const handleLike = useCallback(() => onLike(post.id), [onLike, post.id]);
   const handleComment = useCallback(() => onComment?.(post.id), [onComment, post.id]);
   const isOwner = currentUserId === post.authorId;
 
-  const handleDelete = useCallback(async () => {
-    const confirmed = await confirmAction(
-      'Delete post?',
-      'This permanently removes the post, comments, and media. This cannot be undone.',
-    );
-    if (confirmed) onDelete?.(post.id);
+  const handleDelete = useCallback(() => {
+    setDeleteOpen(false);
+    onDelete?.(post.id);
   }, [onDelete, post.id]);
 
   // Prefer the responsive media array; fall back to the legacy single image.
@@ -66,10 +63,26 @@ function FeedPostComponent({
               <Text style={styles.meta}>{formatRelativeTime(post.createdAt)}</Text>
             </View>
             {isOwner && onDelete ? (
-              <OptionsMenu
-                accessibilityLabel="Post options"
-                options={[{ label: 'Delete post', destructive: true, onPress: handleDelete }]}
-              />
+              <>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Post options"
+                  onPress={() => setDeleteOpen(true)}
+                  hitSlop={8}
+                  style={({ pressed }) => [styles.menuTrigger, pressed && styles.pressed]}
+                >
+                  <Ionicons name="ellipsis-horizontal" size={18} color={colors.textSecondary} />
+                </Pressable>
+                <ConfirmDialog
+                  visible={deleteOpen}
+                  title="Delete post?"
+                  message="This permanently removes the post, comments, and media. This cannot be undone."
+                  confirmLabel="Delete post"
+                  destructive
+                  onConfirm={handleDelete}
+                  onCancel={() => setDeleteOpen(false)}
+                />
+              </>
             ) : null}
           </View>
           <Text style={styles.location}>{getLocation(author.city, author.state)}</Text>
@@ -135,6 +148,10 @@ const styles = StyleSheet.create({
   headerRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
+  },
+  menuTrigger: {
+    padding: spacing.xs,
+    marginLeft: 'auto',
   },
   header: {
     flex: 1,

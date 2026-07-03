@@ -32,7 +32,8 @@ interface ComposerModalProps {
   submitError?: string | null;
   canAddMore: boolean;
   onChangeText: (text: string) => void;
-  onAddMedia: () => void;
+  onAddPhoto: () => void;
+  onAddVideo: () => void;
   onRemoveMedia: (index: number) => void;
   onClose: () => void;
   onSubmit: () => void;
@@ -47,7 +48,8 @@ function ComposerModalComponent({
   submitError,
   canAddMore,
   onChangeText,
-  onAddMedia,
+  onAddPhoto,
+  onAddVideo,
   onRemoveMedia,
   onClose,
   onSubmit,
@@ -77,7 +79,7 @@ function ComposerModalComponent({
             <TextInput
               autoFocus
               multiline
-              placeholder="What's happening in the regional scene?"
+              placeholder="What's on your mind?"
               placeholderTextColor={colors.textSecondary}
               style={styles.input}
               value={text}
@@ -117,15 +119,15 @@ function ComposerModalComponent({
                 <View style={styles.progressTrack}>
                   <View style={[styles.progressFill, { width: `${progressPct}%` }]} />
                 </View>
-                <Text style={styles.progressLabel}>Optimizing and uploading… {progressPct}%</Text>
+                <Text style={styles.progressLabel}>Uploading… {progressPct}%</Text>
               </View>
             ) : null}
 
             <View style={styles.toolbar}>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Add photo or video"
-                onPress={onAddMedia}
+                accessibilityLabel="Add photo"
+                onPress={onAddPhoto}
                 disabled={!canAddMore}
                 style={({ pressed }) => [
                   styles.toolBtn,
@@ -134,9 +136,30 @@ function ComposerModalComponent({
                 ]}
               >
                 <Ionicons
-                  name={media.length > 0 ? 'images' : 'images-outline'}
+                  name={media.some((m) => m.kind === 'image') ? 'image' : 'image-outline'}
                   size={22}
-                  color={media.length > 0 ? colors.primary : colors.textSecondary}
+                  color={
+                    media.some((m) => m.kind === 'image') ? colors.primary : colors.textSecondary
+                  }
+                />
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Add video"
+                onPress={onAddVideo}
+                disabled={!canAddMore}
+                style={({ pressed }) => [
+                  styles.toolBtn,
+                  pressed && styles.pressed,
+                  !canAddMore && styles.toolBtnDisabled,
+                ]}
+              >
+                <Ionicons
+                  name={media.some((m) => m.kind === 'video') ? 'videocam' : 'videocam-outline'}
+                  size={22}
+                  color={
+                    media.some((m) => m.kind === 'video') ? colors.primary : colors.textSecondary
+                  }
                 />
               </Pressable>
               <Text style={[styles.counter, remaining < 20 && styles.counterWarn]}>

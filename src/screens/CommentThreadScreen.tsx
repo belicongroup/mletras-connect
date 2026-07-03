@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '../components/Avatar';
-import { OptionsMenu } from '../components/OptionsMenu';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useApp } from '../context/AppContext';
 import { useAuthLanguage } from '../context/AuthLanguageContext';
 import { createComment, deleteComment, getComments } from '../services/commentsService';
@@ -23,7 +23,7 @@ import { getPost } from '../services/postsService';
 import { Comment, Post, RootStackParamList, UserProfile } from '../types';
 import { colors, layout, spacing, typography } from '../theme';
 import { formatRelativeTime, getLocation } from '../utils/format';
-import { confirmAction, showAlert } from '../utils/alert';
+import { showAlert } from '../utils/alert';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CommentThread'>;
 
@@ -54,14 +54,12 @@ function CommentRow({
   currentUserId?: string;
   onDelete: (commentId: string) => void;
 }) {
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const isOwner = currentUserId === comment.authorId;
 
-  const handleDelete = async () => {
-    const confirmed = await confirmAction(
-      'Delete comment?',
-      'This permanently removes the comment. This cannot be undone.',
-    );
-    if (confirmed) onDelete(comment.id);
+  const handleDelete = () => {
+    setDeleteOpen(false);
+    onDelete(comment.id);
   };
 
   return (
@@ -75,10 +73,26 @@ function CommentRow({
             <Text style={styles.commentMeta}>{formatRelativeTime(comment.createdAt)}</Text>
           </View>
           {isOwner ? (
-            <OptionsMenu
-              accessibilityLabel="Comment options"
-              options={[{ label: 'Delete comment', destructive: true, onPress: handleDelete }]}
-            />
+            <>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Comment options"
+                onPress={() => setDeleteOpen(true)}
+                hitSlop={8}
+                style={({ pressed }) => [styles.menuTrigger, pressed && styles.pressed]}
+              >
+                <Ionicons name="ellipsis-horizontal" size={18} color={colors.textSecondary} />
+              </Pressable>
+              <ConfirmDialog
+                visible={deleteOpen}
+                title="Delete comment?"
+                message="This permanently removes the comment. This cannot be undone."
+                confirmLabel="Delete comment"
+                destructive
+                onConfirm={handleDelete}
+                onCancel={() => setDeleteOpen(false)}
+              />
+            </>
           ) : null}
         </View>
         <Text style={styles.commentText}>{comment.text}</Text>
@@ -100,7 +114,7 @@ export function CommentThreadScreen({ route, navigation }: Props) {
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState('');
-  const [sending, setSending] = useState(false);
+  const [deletePostOpen, setDeletePostOpen] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -175,11 +189,7 @@ export function CommentThreadScreen({ route, navigation }: Props) {
   );
 
   const handleDeletePost = useCallback(async () => {
-    const confirmed = await confirmAction(
-      'Delete post?',
-      'This permanently removes the post, all comments, and media. This cannot be undone.',
-    );
-    if (!confirmed) return;
+    setDeletePostOpen(false);
     const result = await removePost(postId);
     if (result.ok) {
       navigation.goBack();
@@ -205,12 +215,26 @@ export function CommentThreadScreen({ route, navigation }: Props) {
                 <Text style={styles.commentMeta}>{formatRelativeTime(post.createdAt)}</Text>
               </View>
               {isOwner ? (
-                <OptionsMenu
-                  accessibilityLabel="Post options"
-                  options={[
-                    { label: 'Delete post', destructive: true, onPress: handleDeletePost },
-                  ]}
-                />
+                <>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Post options"
+                    onPress={() => setDeletePostOpen(true)}
+                    hitSlop={8}
+                    style={({ pressed }) => [styles.menuTrigger, pressed && styles.pressed]}
+                  >
+                    <Ionicons name="ellipsis-horizontal" size={18} color={colors.textSecondary} />
+                  </Pressable>
+                  <ConfirmDialog
+                    visible={deletePostOpen}
+                    title="Delete post?"
+                    message="This permanently removes the post, all comments, and media. This cannot be undone."
+                    confirmLabel="Delete post"
+                    destructive
+                    onConfirm={handleDeletePost}
+                    onCancel={() => setDeletePostOpen(false)}
+                  />
+                </>
               ) : null}
             </View>
             <Text style={styles.location}>{getLocation(author.city, author.state)}</Text>
@@ -223,7 +247,7 @@ export function CommentThreadScreen({ route, navigation }: Props) {
         <Text style={styles.commentsTitle}>{strings.comments}</Text>
       </View>
     );
-  }, [author, currentUser?.id, handleDeletePost, post, strings.comments]);
+  }, [author, currentUser?.id, deletePostOpen, handleDeletePost, post, strings.comments]);
 
   return (
     <KeyboardAvoidingView
@@ -377,6 +401,13 @@ const styles = StyleSheet.create({
   commentHeaderRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
+  },
+  menuTrigger: {
+    padding: spacing.xs,
+    marginLeft: 'auto',
+  },
+  pressed: {
+    opacity: 0.7,
   },
   commentHeader: {
     flex: 1,

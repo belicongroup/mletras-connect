@@ -87,29 +87,31 @@ export function FeedScreen({ navigation }: Props) {
     setSubmitError(null);
   }, []);
 
-  const handleAddMedia = useCallback(async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) return;
+  const pickMedia = useCallback(
+    async (kind: 'image' | 'video') => {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) return;
 
-    if (pickedMedia.length > 0) return;
+      if (pickedMedia.length > 0) return;
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images', 'videos'],
-      allowsMultipleSelection: false,
-      quality: 0.8,
-    });
-    if (result.canceled) return;
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: kind === 'video' ? ['videos'] : ['images'],
+        allowsMultipleSelection: false,
+        quality: 0.8,
+      });
+      if (result.canceled) return;
 
-    const asset = result.assets[0];
-    if (!asset) return;
-    if (asset.type === 'video') {
+      const asset = result.assets[0];
+      if (!asset) return;
       setPickedMedia([
-        { uri: asset.uri, kind: 'video', width: asset.width, height: asset.height },
+        { uri: asset.uri, kind, width: asset.width, height: asset.height },
       ]);
-      return;
-    }
-    setPickedMedia([{ uri: asset.uri, kind: 'image', width: asset.width, height: asset.height }]);
-  }, [pickedMedia]);
+    },
+    [pickedMedia],
+  );
+
+  const handleAddPhoto = useCallback(() => pickMedia('image'), [pickMedia]);
+  const handleAddVideo = useCallback(() => pickMedia('video'), [pickMedia]);
 
   const removeMedia = useCallback((index: number) => {
     setPickedMedia((prev) => prev.filter((_, i) => i !== index));
@@ -343,7 +345,8 @@ export function FeedScreen({ navigation }: Props) {
         submitError={submitError}
         canAddMore={canAddMore}
         onChangeText={setComposerText}
-        onAddMedia={handleAddMedia}
+        onAddPhoto={handleAddPhoto}
+        onAddVideo={handleAddVideo}
         onRemoveMedia={removeMedia}
         onClose={closeComposer}
         onSubmit={handleSubmitPost}

@@ -10,13 +10,25 @@ interface PostVideoProps {
   media: PostMedia;
 }
 
+// X-style uniform framing: every video sits in a consistent card regardless of
+// its native dimensions. Landscape is capped at 16:9 and portrait at 4:5 so
+// tall phone clips don't dominate the feed. Anything outside this range is
+// letterboxed (contain) inside the clamped frame so nothing is ever cropped.
+const MIN_ASPECT = 4 / 5; // 0.8 — tallest allowed (portrait)
+const MAX_ASPECT = 16 / 9; // 1.778 — widest allowed (landscape)
+
+function clampAspect(width?: number, height?: number): number {
+  if (!width || !height) return 16 / 9;
+  return Math.min(MAX_ASPECT, Math.max(MIN_ASPECT, width / height));
+}
+
 /**
  * Inline HLS video with poster-first playback. The player is only given a
  * source once the user taps play, so idle feed items stay cheap.
  */
 function PostVideoComponent({ media }: PostVideoProps) {
   const [active, setActive] = useState(false);
-  const aspectRatio = media.width && media.height ? media.width / media.height : 16 / 9;
+  const aspectRatio = clampAspect(media.width, media.height);
 
   const player = useVideoPlayer(active ? media.hlsUrl ?? media.url : null, (p) => {
     p.loop = false;
@@ -27,7 +39,7 @@ function PostVideoComponent({ media }: PostVideoProps) {
     return (
       <View style={[styles.container, { aspectRatio }]}>
         {media.posterUrl ? (
-          <Image style={styles.poster} source={{ uri: media.posterUrl }} contentFit="cover" />
+          <Image style={styles.poster} source={{ uri: media.posterUrl }} contentFit="contain" />
         ) : null}
         <View style={styles.overlay}>
           <ActivityIndicator color="#FFFFFF" />
@@ -48,7 +60,7 @@ function PostVideoComponent({ media }: PostVideoProps) {
         onPress={() => setActive(true)}
       >
         {media.posterUrl ? (
-          <Image style={styles.poster} source={{ uri: media.posterUrl }} contentFit="cover" />
+          <Image style={styles.poster} source={{ uri: media.posterUrl }} contentFit="contain" />
         ) : null}
         <View style={styles.playButton}>
           <Ionicons name="play" size={28} color="#FFFFFF" />
@@ -71,9 +83,12 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     borderRadius: 16,
     overflow: 'hidden',
-    backgroundColor: colors.placeholder,
+    backgroundColor: '#000000',
     justifyContent: 'center',
     alignItems: 'center',
+    width: '100%',
+    maxWidth: 500,
+    alignSelf: 'center',
   },
   poster: {
     position: 'absolute',

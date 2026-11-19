@@ -12,7 +12,12 @@ import {
 } from '../lib/otp';
 import { hashPassword, verifyPassword } from '../lib/password';
 import { enforceRateLimit, getClientIp } from '../lib/rateLimit';
-import { normalizeUsername, serializeUser, type UserRow } from '../lib/user';
+import {
+  generateGuestUsername,
+  normalizeUsername,
+  serializeUser,
+  type UserRow,
+} from '../lib/user';
 
 export type { Env };
 
@@ -26,6 +31,8 @@ const OTP_VERIFY_IP_LIMIT = 200;
 const SIGNUP_IP_LIMIT = 100;
 const LOGIN_IP_LIMIT = 200;
 const LOGIN_EMAIL_LIMIT = 100;
+const GUEST_IP_LIMIT = 30;
+const GUEST_USERNAME_ATTEMPTS = 8;
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -125,6 +132,79 @@ export async function handleAuthRequest(
     return jsonResponse(request, { ok: true });
   }
 
+  if (path === '/auth/guest' && request.method === 'POST') {
+    const guestLimited = await enforceRateLimit(
+      request,
+      env.OTP,
+      `guest:ip:${getClientIp(request)}`,
+      GUEST_IP_LIMIT,
+      3600,
+      env.ENABLE_TEST_ROUTES === 'true',
+    );
+    if (guestLimited) return guestLimited;
+
+    const id = createId();
+    const createdAt = new Date().toISOString();
+    const email = `guest_${id}@guest.local`;
+    // Unusable random secret — guests cannot log in with credentials.
+    const passwordHash = await hashPassword(createId());
+
+    let username: string | null = null;
+    for (let attempt = 0; attempt < GUEST_USERNAME_ATTEMPTS; attempt += 1) {
+      const candidate = generateGuestUsername();
+      try {
+        await env.DB.prepare(
+          `INSERT INTO users (
+            id, email, password_hash, username, first_name, last_name,
+            country, state, city, instruments, created_at, updated_at, is_guest
+          ) VALUES (?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, 1)`,
+        )
+          .bind(
+            id,
+            email,
+            passwordHash,
+            candidate,
+            'Unknown',
+            'Unknown',
+            'Unknown',
+            '[]',
+            createdAt,
+            createdAt,
+          )
+          .run();
+        username = candidate;
+        break;
+      } catch {
+        // Username collision — retry with a new candidate.
+      }
+    }
+
+    if (!username) {
+      return errorResponse(request, 'unknown', 500);
+    }
+
+    const token = await createToken(
+      { sub: id, email, username, tv: 0 },
+      env.JWT_SECRET,
+    );
+
+    return jsonResponse(request, {
+      ok: true,
+      token,
+      user: {
+        id,
+        email,
+        username,
+        country: 'Unknown',
+        state: 'Unknown',
+        city: 'Unknown',
+        instruments: [] as string[],
+        createdAt,
+        isGuest: true,
+      },
+    });
+  }
+
   if (path === '/auth/signup' && request.method === 'POST') {
     const body = await readJson<{
       email?: string;
@@ -173,57 +253,119 @@ export async function handleAuthRequest(
       return errorResponse(request, 'otpNotVerified');
     }
 
+    // Optional claim: upgrade the current guest session into a real account.
+    let guestRow: UserRow | null = null;
+    const auth = await requireAuth(request, env);
+    if (!(auth instanceof Response)) {
+      const row = await env.DB.prepare('SELECT * FROM users WHERE id = ?')
+        .bind(auth.payload.sub)
+        .first<UserRow>();
+      if (
+        row &&
+        row.is_guest === 1 &&
+        (auth.payload.tv ?? 0) === (row.token_version ?? 0)
+      ) {
+        guestRow = row;
+      }
+    }
+
     const emailTaken = await env.DB.prepare('SELECT id FROM users WHERE email = ?')
       .bind(email)
-      .first();
-    if (emailTaken) {
+      .first<{ id: string }>();
+    if (emailTaken && emailTaken.id !== guestRow?.id) {
       return errorResponse(request, 'emailTaken');
     }
 
     const usernameTaken = await env.DB.prepare('SELECT id FROM users WHERE username = ?')
       .bind(username)
-      .first();
-    if (usernameTaken) {
+      .first<{ id: string }>();
+    if (usernameTaken && usernameTaken.id !== guestRow?.id) {
       return errorResponse(request, 'usernameTaken');
     }
 
     const passwordHash = await hashPassword(password);
-    const id = createId();
-    const createdAt = new Date().toISOString();
+    const firstName = body.firstName?.trim() || null;
+    const lastName = body.lastName?.trim() || null;
+    const country = body.country.trim();
+    const state = body.state.trim();
+    const city = body.city.trim();
+    const instrumentsJson = JSON.stringify(body.instruments);
+    const now = new Date().toISOString();
 
-    try {
-      await env.DB.prepare(
-        `INSERT INTO users (
-          id, email, password_hash, username, first_name, last_name,
-          country, state, city, instruments, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-        .bind(
-          id,
-          email,
-          passwordHash,
-          username,
-          body.firstName?.trim() || null,
-          body.lastName?.trim() || null,
-          body.country.trim(),
-          body.state.trim(),
-          body.city.trim(),
-          JSON.stringify(body.instruments),
-          createdAt,
-          createdAt,
+    let id: string;
+    let createdAt: string;
+    let tokenVersion = 0;
+
+    if (guestRow) {
+      id = guestRow.id;
+      createdAt = guestRow.created_at;
+      tokenVersion = (guestRow.token_version ?? 0) + 1;
+      try {
+        await env.DB.prepare(
+          `UPDATE users SET
+            email = ?, password_hash = ?, username = ?,
+            first_name = ?, last_name = ?,
+            country = ?, state = ?, city = ?, instruments = ?,
+            is_guest = 0, token_version = ?, updated_at = ?
+          WHERE id = ? AND is_guest = 1`,
         )
-        .run();
-    } catch {
-      // UNIQUE constraint race (concurrent signups sharing one verification).
-      // Re-check which field collided so the client gets a precise error.
-      const dupUsername = await env.DB.prepare('SELECT id FROM users WHERE username = ?')
-        .bind(username)
-        .first();
-      return errorResponse(request, dupUsername ? 'usernameTaken' : 'emailTaken');
+          .bind(
+            email,
+            passwordHash,
+            username,
+            firstName,
+            lastName,
+            country,
+            state,
+            city,
+            instrumentsJson,
+            tokenVersion,
+            now,
+            id,
+          )
+          .run();
+      } catch {
+        const dupUsername = await env.DB.prepare('SELECT id FROM users WHERE username = ?')
+          .bind(username)
+          .first();
+        return errorResponse(request, dupUsername ? 'usernameTaken' : 'emailTaken');
+      }
+    } else {
+      id = createId();
+      createdAt = now;
+      try {
+        await env.DB.prepare(
+          `INSERT INTO users (
+            id, email, password_hash, username, first_name, last_name,
+            country, state, city, instruments, created_at, updated_at, is_guest
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+        )
+          .bind(
+            id,
+            email,
+            passwordHash,
+            username,
+            firstName,
+            lastName,
+            country,
+            state,
+            city,
+            instrumentsJson,
+            createdAt,
+            createdAt,
+          )
+          .run();
+      } catch {
+        // UNIQUE constraint race (concurrent signups sharing one verification).
+        const dupUsername = await env.DB.prepare('SELECT id FROM users WHERE username = ?')
+          .bind(username)
+          .first();
+        return errorResponse(request, dupUsername ? 'usernameTaken' : 'emailTaken');
+      }
     }
 
     const token = await createToken(
-      { sub: id, email, username, tv: 0 },
+      { sub: id, email, username, tv: tokenVersion },
       env.JWT_SECRET,
     );
 
@@ -234,13 +376,14 @@ export async function handleAuthRequest(
         id,
         email,
         username,
-        firstName: body.firstName?.trim() || undefined,
-        lastName: body.lastName?.trim() || undefined,
-        country: body.country.trim(),
-        state: body.state.trim(),
-        city: body.city.trim(),
+        firstName: firstName ?? undefined,
+        lastName: lastName ?? undefined,
+        country,
+        state,
+        city,
         instruments: body.instruments,
         createdAt,
+        isGuest: false,
       },
     });
   }
@@ -264,7 +407,7 @@ export async function handleAuthRequest(
     const row = await env.DB.prepare('SELECT * FROM users WHERE email = ?')
       .bind(email)
       .first<UserRow>();
-    if (!row) {
+    if (!row || row.is_guest === 1) {
       return errorResponse(request, 'invalidCredentials');
     }
 

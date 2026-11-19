@@ -14,6 +14,7 @@ import { Button } from '../components/Button';
 import { TextField } from '../components/TextField';
 import { EMAIL_REGEX } from '../constants/auth';
 import { useAuthLanguage } from '../context/AuthLanguageContext';
+import { mapAuthError, sendOtp } from '../services/authService';
 import { RootStackParamList } from '../types';
 import { colors, layout, spacing, typography } from '../theme';
 
@@ -24,8 +25,9 @@ export function ForgotPasswordScreen({ navigation }: Props) {
   const { strings } = useAuthLanguage();
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleNext = () => {
+  const handleNext = async () => {
     const trimmed = email.trim().toLowerCase();
     if (!trimmed) {
       setError(strings.emailRequired);
@@ -33,6 +35,16 @@ export function ForgotPasswordScreen({ navigation }: Props) {
     }
     if (!EMAIL_REGEX.test(trimmed)) {
       setError(strings.emailInvalid);
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    const result = await sendOtp(trimmed, 'reset');
+    setLoading(false);
+
+    if (!result.ok) {
+      setError(mapAuthError(result.error, strings));
       return;
     }
 
@@ -70,7 +82,7 @@ export function ForgotPasswordScreen({ navigation }: Props) {
             error={error}
             containerStyle={styles.fieldWrap}
           />
-          <Button label={strings.next} onPress={handleNext} fullWidth />
+          <Button label={strings.next} onPress={handleNext} loading={loading} fullWidth />
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

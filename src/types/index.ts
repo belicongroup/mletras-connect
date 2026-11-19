@@ -26,6 +26,8 @@ export interface UserProfile {
   state: string;
   instruments: Instrument[];
   createdAt: string;
+  /** Soft identity created via /auth/guest; can claim a real account. */
+  isGuest?: boolean;
 }
 
 export interface ImageVariantUrls {

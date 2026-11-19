@@ -79,6 +79,14 @@ export function FeedScreen({ navigation }: Props) {
     Animated.timing(slideAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start();
   }, [slideAnim]);
 
+  const handleAvatarPress = useCallback(() => {
+    if (currentUser?.isGuest) {
+      navigation.navigate('SignUpEmail');
+      return;
+    }
+    openDrawer();
+  }, [currentUser?.isGuest, navigation, openDrawer]);
+
   const closeDrawer = useCallback(() => {
     Animated.timing(slideAnim, { toValue: -280, duration: 200, useNativeDriver: true }).start(
       () => setDrawerOpen(false),
@@ -356,7 +364,7 @@ export function FeedScreen({ navigation }: Props) {
           <FeedHeader
             user={currentUser}
             unreadCount={unreadCount}
-            onAvatarPress={openDrawer}
+            onAvatarPress={handleAvatarPress}
             onNotificationsPress={() => navigation.navigate('Notifications')}
           />
         </Animated.View>

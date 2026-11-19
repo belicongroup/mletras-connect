@@ -29,6 +29,13 @@ export function ProfileScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (currentUser?.isGuest) {
+      navigation.replace('SignUpEmail');
+    }
+  }, [currentUser?.isGuest, navigation]);
+
+  useEffect(() => {
+    if (currentUser?.isGuest) return;
     let mounted = true;
     (async () => {
       const page = await getMyPosts(null);
@@ -39,7 +46,7 @@ export function ProfileScreen({ navigation }: Props) {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [currentUser?.isGuest]);
 
   const handleToggleLike = useCallback((postId: string) => {
     setUserPosts((prev) => {

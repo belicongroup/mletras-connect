@@ -19,6 +19,7 @@ export type AuthErrorCode =
   | 'locationRequired'
   | 'instrumentsRequired'
   | 'emailSendFailed'
+  | 'tooManyRequests'
   | 'networkError'
   | 'unauthorized'
   | 'unknown';
@@ -40,6 +41,7 @@ interface ApiUser {
   city: string;
   instruments: Instrument[];
   createdAt: string;
+  isGuest?: boolean;
 }
 
 function mapUser(user: ApiUser): UserProfile {
@@ -54,6 +56,7 @@ function mapUser(user: ApiUser): UserProfile {
     city: user.city,
     instruments: user.instruments,
     createdAt: user.createdAt,
+    isGuest: user.isGuest === true,
   };
 }
 
@@ -130,13 +133,38 @@ export interface SignUpInput {
   instruments: Instrument[];
 }
 
+export async function createGuest(): Promise<
+  ApiResult<{ token: string; user: UserProfile }>
+> {
+  const result = await request<{ token: string; user: ApiUser }>('/auth/guest', {
+    method: 'POST',
+  });
+
+  if (!result.ok || !result.data) {
+    return { ok: false, error: result.error };
+  }
+
+  return {
+    ok: true,
+    data: {
+      token: result.data.token,
+      user: mapUser(result.data.user),
+    },
+  };
+}
+
 export async function signUp(
   input: SignUpInput,
 ): Promise<ApiResult<{ token: string; user: UserProfile }>> {
-  const result = await request<{ token: string; user: ApiUser }>('/auth/signup', {
-    method: 'POST',
-    body: JSON.stringify(input),
-  });
+  // Send Bearer when present so a guest session can be claimed into this account.
+  const result = await request<{ token: string; user: ApiUser }>(
+    '/auth/signup',
+    {
+      method: 'POST',
+      body: JSON.stringify(input),
+    },
+    true,
+  );
 
   if (!result.ok || !result.data) {
     return { ok: false, error: result.error };
@@ -232,6 +260,9 @@ export function mapAuthError(
     accountNotFound: string;
     signInFailed: string;
     usernameTaken: string;
+    emailTakenSignup: string;
+    emailSendFailed: string;
+    tooManyRequests: string;
     createAccountFailed: string;
     codeRequired: string;
     passwordMismatch: string;
@@ -241,6 +272,7 @@ export function mapAuthError(
     case 'emailInvalid':
       return strings.emailInvalid;
     case 'emailTaken':
+      return strings.emailTakenSignup;
     case 'usernameTaken':
       return strings.usernameTaken;
     case 'accountNotFound':
@@ -254,6 +286,10 @@ export function mapAuthError(
       return strings.codeRequired;
     case 'passwordInvalid':
       return strings.passwordMismatch;
+    case 'emailSendFailed':
+      return strings.emailSendFailed;
+    case 'tooManyRequests':
+      return strings.tooManyRequests;
     case 'networkError':
       return strings.signInFailed;
     default:

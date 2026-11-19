@@ -12,7 +12,8 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TEXT NOT NULL,
   updated_at TEXT,
   token_version INTEGER NOT NULL DEFAULT 0,
-  posts_count INTEGER NOT NULL DEFAULT 0
+  posts_count INTEGER NOT NULL DEFAULT 0,
+  is_guest INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_email ON users (email);

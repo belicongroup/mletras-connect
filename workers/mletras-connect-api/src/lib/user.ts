@@ -18,6 +18,7 @@ export interface UserRow {
   updated_at: string | null;
   token_version: number;
   posts_count: number;
+  is_guest?: number;
 }
 
 export function serializeUser(row: UserRow) {
@@ -32,7 +33,14 @@ export function serializeUser(row: UserRow) {
     city: row.city,
     instruments: JSON.parse(row.instruments) as string[],
     createdAt: row.created_at,
+    isGuest: (row.is_guest ?? 0) === 1,
   };
+}
+
+/** Username form: mletrasguest + 6 digits. */
+export function generateGuestUsername(): string {
+  const n = crypto.getRandomValues(new Uint32Array(1))[0]! % 1_000_000;
+  return `mletrasguest${String(n).padStart(6, '0')}`;
 }
 
 // Must stay in sync with the Instrument union in the client (src/types/index.ts).

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -23,12 +24,13 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Auth'>;
 
 export function AuthScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
-  const { signIn } = useApp();
+  const { currentUser, signIn } = useApp();
   const { strings } = useAuthLanguage();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const canReturnToFeed = Boolean(currentUser) && navigation.canGoBack();
 
   const handleSignIn = async () => {
     if (!email.trim()) {
@@ -49,7 +51,10 @@ export function AuthScreen({ navigation }: Props) {
       setError(
         mapAuthError(result.error as Parameters<typeof mapAuthError>[0], strings),
       );
+      return;
     }
+
+    navigation.reset({ index: 0, routes: [{ name: 'Feed' }] });
   };
 
   return (
@@ -64,6 +69,18 @@ export function AuthScreen({ navigation }: Props) {
         ]}
         keyboardShouldPersistTaps="handled"
       >
+        {canReturnToFeed ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+            onPress={() => navigation.goBack()}
+            hitSlop={8}
+            style={styles.back}
+          >
+            <Text style={styles.backText}>←</Text>
+          </Pressable>
+        ) : null}
+
         <AuthHeader showSubtext={false} />
 
         <View style={styles.actions}>
@@ -130,6 +147,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xxl,
     paddingBottom: spacing.xxl,
     justifyContent: 'center',
+  },
+  back: {
+    alignSelf: 'flex-start',
+    marginBottom: spacing.md,
+  },
+  backText: {
+    ...typography.heading,
+    color: colors.text,
   },
   actions: {
     gap: spacing.md,

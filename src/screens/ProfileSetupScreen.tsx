@@ -26,7 +26,7 @@ import { colors, layout, spacing, typography } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ProfileSetup'>;
 
-export function ProfileSetupScreen({ route }: Props) {
+export function ProfileSetupScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const { signUp } = useApp();
   const { strings } = useAuthLanguage();
@@ -117,7 +117,10 @@ export function ProfileSetupScreen({ route }: Props) {
       } else {
         setError(result.error ?? strings.createAccountFailed);
       }
+      return;
     }
+
+    navigation.reset({ index: 0, routes: [{ name: 'Feed' }] });
   };
 
   return (

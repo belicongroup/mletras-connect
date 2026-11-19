@@ -9,7 +9,8 @@ interface VerifiedRecord {
   verifiedAt: number;
 }
 
-const OTP_TTL_SECONDS = 60;
+/** How long the 6-digit code remains valid after send (allows for email delivery delay). */
+export const OTP_TTL_SECONDS = 900; // 15 minutes
 const VERIFIED_TTL_SECONDS = 900;
 const MAX_ATTEMPTS = 5;
 
@@ -84,4 +85,25 @@ export async function consumeVerification(
   if (!raw) return false;
   await kv.delete(key);
   return true;
+}
+
+/** Test-only: read pending OTP without consuming (requires ENABLE_TEST_ROUTES). */
+export async function peekOtp(
+  kv: KVNamespace,
+  flow: OtpFlow,
+  email: string,
+): Promise<{ code: string; attempts: number } | null> {
+  const raw = await kv.get(otpKey(flow, email));
+  if (!raw) return null;
+  return JSON.parse(raw) as OtpRecord;
+}
+
+/** Test-only: check whether email has a consumed-but-unused verification flag. */
+export async function peekVerified(
+  kv: KVNamespace,
+  flow: OtpFlow,
+  email: string,
+): Promise<boolean> {
+  const raw = await kv.get(verifiedKey(flow, email));
+  return raw !== null;
 }

@@ -38,6 +38,9 @@ export async function handleUsersRequest(
     if ((auth.payload.tv ?? 0) !== (row.token_version ?? 0)) {
       return errorResponse(request, 'unauthorized', 401);
     }
+    if (row.is_guest === 1) {
+      return errorResponse(request, 'unauthorized', 401);
+    }
 
     const body = await readJson<UpdateProfileBody>(request);
     if (!body) {

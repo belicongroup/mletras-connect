@@ -1,4 +1,7 @@
+import { OTP_TTL_SECONDS } from './otp';
+
 const APP_URL = 'https://connect.mletras.com';
+const OTP_EXPIRY_MINUTES = Math.round(OTP_TTL_SECONDS / 60);
 
 function buildOtpEmailHtml(options: {
   code: string;
@@ -48,7 +51,7 @@ function buildOtpEmailHtml(options: {
           </tr>
           <tr>
             <td style="padding:8px 28px 24px;">
-              <p style="margin:0;font-size:13px;line-height:1.6;color:#9aa3b2;text-align:center;">This code expires in <strong style="color:#ffffff;">1 minute</strong>.</p>
+              <p style="margin:0;font-size:13px;line-height:1.6;color:#9aa3b2;text-align:center;">This code expires in <strong style="color:#ffffff;">${OTP_EXPIRY_MINUTES} minutes</strong>.</p>
             </td>
           </tr>
           <tr>
@@ -84,7 +87,7 @@ ${intro}
 
 Your code: ${code}
 
-This code expires in 1 minute.
+This code expires in ${OTP_EXPIRY_MINUTES} minutes.
 
 Open MLetras Connect: ${APP_URL}
 
@@ -98,7 +101,12 @@ export async function sendOtpEmail(
   toEmail: string,
   code: string,
   flow: 'signup' | 'reset',
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true; resendId: string } | { ok: false; error: string; detail?: string }> {
+  if (!apiKey?.trim()) {
+    console.error('Resend error: RESEND_API_KEY is missing or empty');
+    return { ok: false, error: 'emailSendFailed', detail: 'missingApiKey' };
+  }
+
   const isReset = flow === 'reset';
   const heading = isReset ? 'Reset your password' : 'Verify your email';
   const intro = isReset
@@ -111,26 +119,48 @@ export async function sendOtpEmail(
   const html = buildOtpEmailHtml({ code, heading, intro });
   const text = buildOtpEmailText({ code, heading, intro });
 
-  const response = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from: fromEmail,
-      to: [toEmail],
-      subject,
-      html,
-      text,
-    }),
-  });
-
-  if (!response.ok) {
-    const detail = await response.text();
-    console.error('Resend error:', response.status, detail);
-    return { ok: false, error: 'emailSendFailed' };
+  let response: Response;
+  try {
+    response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: fromEmail,
+        to: [toEmail],
+        subject,
+        html,
+        text,
+      }),
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('Resend fetch failed:', message);
+    return { ok: false, error: 'emailSendFailed', detail: 'networkError' };
   }
 
-  return { ok: true };
+  const detail = await response.text();
+  if (!response.ok) {
+    console.error('Resend error:', response.status, detail);
+    return { ok: false, error: 'emailSendFailed', detail: `${response.status}:${detail}` };
+  }
+
+  let resendId = '';
+  try {
+    const parsed = JSON.parse(detail) as { id?: string };
+    resendId = parsed.id ?? '';
+  } catch {
+    console.error('Resend error: unexpected response body', detail);
+    return { ok: false, error: 'emailSendFailed', detail: 'invalidResponse' };
+  }
+
+  if (!resendId) {
+    console.error('Resend error: response missing email id', detail);
+    return { ok: false, error: 'emailSendFailed', detail: 'missingEmailId' };
+  }
+
+  console.log('Resend OTP sent:', { resendId, toEmail, flow });
+  return { ok: true, resendId };
 }

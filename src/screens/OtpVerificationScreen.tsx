@@ -21,7 +21,7 @@ import { colors, layout, spacing, typography } from '../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'OtpVerification'>;
 
-const RESEND_COOLDOWN_SECONDS = 60;
+const RESEND_COOLDOWN_SECONDS = 15;
 
 export function OtpVerificationScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
@@ -30,7 +30,7 @@ export function OtpVerificationScreen({ navigation, route }: Props) {
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [pending, setPending] = useState(true);
+  const [pending, setPending] = useState(false);
   const [resendSeconds, setResendSeconds] = useState(RESEND_COOLDOWN_SECONDS);
 
   const dispatchOtp = useCallback(async () => {
@@ -43,9 +43,7 @@ export function OtpVerificationScreen({ navigation, route }: Props) {
     }
   }, [email, flow, strings]);
 
-  useEffect(() => {
-    dispatchOtp();
-  }, [dispatchOtp]);
+  // OTP is sent before navigation (SignUpEmail / ForgotPassword). Only resend triggers send here.
 
   useEffect(() => {
     if (resendSeconds <= 0) return;

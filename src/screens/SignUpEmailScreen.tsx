@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -13,7 +14,9 @@ import { AuthHeader } from '../components/AuthHeader';
 import { Button } from '../components/Button';
 import { TextField } from '../components/TextField';
 import { EMAIL_REGEX } from '../constants/auth';
+import { useApp } from '../context/AppContext';
 import { useAuthLanguage } from '../context/AuthLanguageContext';
+import { mapAuthError, sendOtp } from '../services/authService';
 import { RootStackParamList } from '../types';
 import { colors, layout, spacing, typography } from '../theme';
 
@@ -21,11 +24,14 @@ type Props = NativeStackScreenProps<RootStackParamList, 'SignUpEmail'>;
 
 export function SignUpEmailScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
+  const { currentUser } = useApp();
   const { strings } = useAuthLanguage();
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const canReturnToFeed = Boolean(currentUser) && navigation.canGoBack();
 
-  const handleNext = () => {
+  const handleNext = async () => {
     const trimmed = email.trim().toLowerCase();
     if (!trimmed) {
       setError(strings.emailRequired);
@@ -33,6 +39,16 @@ export function SignUpEmailScreen({ navigation }: Props) {
     }
     if (!EMAIL_REGEX.test(trimmed)) {
       setError(strings.emailInvalid);
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    const result = await sendOtp(trimmed, 'signup');
+    setLoading(false);
+
+    if (!result.ok) {
+      setError(mapAuthError(result.error, strings));
       return;
     }
 
@@ -51,6 +67,18 @@ export function SignUpEmailScreen({ navigation }: Props) {
         ]}
         keyboardShouldPersistTaps="handled"
       >
+        {canReturnToFeed ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+            onPress={() => navigation.goBack()}
+            hitSlop={8}
+            style={styles.back}
+          >
+            <Text style={styles.backText}>←</Text>
+          </Pressable>
+        ) : null}
+
         <AuthHeader />
 
         <View style={styles.actions}>
@@ -69,7 +97,7 @@ export function SignUpEmailScreen({ navigation }: Props) {
             error={error}
             containerStyle={styles.fieldWrap}
           />
-          <Button label={strings.next} onPress={handleNext} fullWidth />
+          <Button label={strings.next} onPress={handleNext} loading={loading} fullWidth />
         </View>
 
         <View style={styles.footer}>
@@ -99,6 +127,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xxl,
     paddingBottom: spacing.xxl,
     justifyContent: 'center',
+  },
+  back: {
+    alignSelf: 'flex-start',
+    marginBottom: spacing.md,
+  },
+  backText: {
+    ...typography.heading,
+    color: colors.text,
   },
   heading: {
     ...typography.heading,

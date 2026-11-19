@@ -40,7 +40,10 @@ export async function enforceRateLimit(
   key: string,
   limit: number,
   windowSeconds: number,
+  /** When true (ENABLE_TEST_ROUTES), skip throttling for local simulation runs. */
+  skip = false,
 ): Promise<Response | null> {
+  if (skip) return null;
   const allowed = await checkRateLimit(kv, key, limit, windowSeconds);
   if (allowed) return null;
   return errorResponse(request, 'tooManyRequests', 429);

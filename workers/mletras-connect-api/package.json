@@ -15,7 +15,9 @@
     "db:migrate:phase4": "wrangler d1 execute mletras-connect-db --remote --file=./src/db/migrations/0004_phase4_media_pipeline.sql",
     "db:migrate:phase4:local": "wrangler d1 execute mletras-connect-db --local --file=./src/db/migrations/0004_phase4_media_pipeline.sql",
     "db:migrate:phase5": "wrangler d1 execute mletras-connect-db --remote --file=./src/db/migrations/0005_username_lowercase.sql",
-    "db:migrate:phase5:local": "wrangler d1 execute mletras-connect-db --local --file=./src/db/migrations/0005_username_lowercase.sql"
+    "db:migrate:phase5:local": "wrangler d1 execute mletras-connect-db --local --file=./src/db/migrations/0005_username_lowercase.sql",
+    "db:migrate:phase6": "wrangler d1 execute mletras-connect-db --remote --file=./src/db/migrations/0006_guest_users.sql",
+    "db:migrate:phase6:local": "wrangler d1 execute mletras-connect-db --local --file=./src/db/migrations/0006_guest_users.sql"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250320.0",

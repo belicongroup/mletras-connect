@@ -1,0 +1,19 @@
+{
+  "name": "mletras-connect-simulation",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "simulate": "tsx src/index.ts",
+    "simulate:quick": "tsx src/index.ts --personas 3 --duration 30 --scenarios auth,posts,security",
+    "simulate:stress": "tsx src/index.ts --personas 8 --duration 120 --scenarios stress,edge-cases",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "tsx": "^4.19.4",
+    "typescript": "~5.8.2",
+    "vitest": "^3.1.4"
+  }
+}

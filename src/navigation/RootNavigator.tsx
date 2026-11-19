@@ -1,6 +1,10 @@
 import React from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
-import { NavigationContainer, DarkTheme } from '@react-navigation/native';
+import {
+  NavigationContainer,
+  DarkTheme,
+  LinkingOptions,
+} from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useApp } from '../context/AppContext';
 import { AuthScreen } from '../screens/AuthScreen';
@@ -32,6 +36,33 @@ const navTheme = {
   },
 };
 
+// Maps screens to URL paths so the browser address bar and the back/forward
+// buttons stay in sync with in-app navigation on web.
+const linking: LinkingOptions<RootStackParamList> = {
+  prefixes: [
+    'https://connect.mletras.com',
+    'https://mletras-connect.pages.dev',
+    'http://localhost:8081',
+    'http://localhost:19006',
+  ],
+  config: {
+    screens: {
+      SignUpEmail: 'signup',
+      Auth: 'login',
+      ForgotPassword: 'forgot-password',
+      OtpVerification: 'verify',
+      CreatePassword: 'create-password',
+      ProfileSetup: 'profile-setup',
+      Feed: '',
+      Profile: 'profile',
+      EditProfile: 'edit-profile',
+      Settings: 'settings',
+      Notifications: 'notifications',
+      CommentThread: 'post/:postId',
+    },
+  },
+};
+
 export function RootNavigator() {
   const { isLoading, currentUser } = useApp();
 
@@ -44,7 +75,7 @@ export function RootNavigator() {
   }
 
   return (
-    <NavigationContainer theme={navTheme}>
+    <NavigationContainer theme={navTheme} linking={linking}>
       <Stack.Navigator
         screenOptions={{
           headerShown: false,
@@ -60,6 +91,13 @@ export function RootNavigator() {
             <Stack.Screen name="Settings" component={SettingsScreen} />
             <Stack.Screen name="Notifications" component={NotificationsScreen} />
             <Stack.Screen name="CommentThread" component={CommentThreadScreen} />
+            {/* Auth screens stay reachable so guests can optionally create an account. */}
+            <Stack.Screen name="SignUpEmail" component={SignUpEmailScreen} />
+            <Stack.Screen name="Auth" component={AuthScreen} />
+            <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+            <Stack.Screen name="OtpVerification" component={OtpVerificationScreen} />
+            <Stack.Screen name="CreatePassword" component={CreatePasswordScreen} />
+            <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
           </>
         ) : (
           <>

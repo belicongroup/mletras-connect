@@ -183,6 +183,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [refreshFeed, refreshUnreadCount],
   );
 
+  const startGuestSession = useCallback(async () => {
+    const guest = await authService.createGuest();
+    if (!guest.ok || !guest.data) {
+      return false;
+    }
+
+    const session: LocalSession = {
+      userId: guest.data.user.id,
+      token: guest.data.token,
+      hasCompletedProfile: true,
+    };
+    await saveSession(session);
+    await restoreAuthenticatedUser(guest.data.user, session);
+    return true;
+  }, [restoreAuthenticatedUser]);
+
   useEffect(() => {
     let mounted = true;
 
@@ -190,20 +206,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const session = await getSession();
       if (!mounted) return;
 
+      let restored = false;
+
       if (session?.token) {
         const me = await authService.getCurrentUser();
         if (!mounted) return;
 
         if (me.ok && me.data) {
           await restoreAuthenticatedUser(me.data, session);
+          restored = true;
         } else if (me.error === 'unauthorized') {
           await clearSession();
         } else {
           const cached = await getCachedUser();
           if (cached?.id === session.userId) {
             await restoreAuthenticatedUser(cached, session);
+            restored = true;
           }
         }
+      }
+
+      if (!restored && mounted) {
+        await startGuestSession();
       }
 
       if (mounted) setIsLoading(false);
@@ -213,7 +237,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return () => {
       mounted = false;
     };
-  }, [restoreAuthenticatedUser]);
+  }, [restoreAuthenticatedUser, startGuestSession]);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -293,15 +317,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = useCallback(async () => {
     await authService.logout();
-    setCurrentUser(null);
-    setHasCompletedProfile(false);
+    await clearSession();
     setUsers({});
     setPosts([]);
     setUnreadCount(0);
     cursorRef.current = null;
     setFeedHasMore(true);
-    await clearSession();
-  }, []);
+    // Drop into a fresh guest session without flashing the auth stack.
+    const ok = await startGuestSession();
+    if (!ok) {
+      setCurrentUser(null);
+      setHasCompletedProfile(false);
+    }
+  }, [startGuestSession]);
 
   const updateProfile = useCallback(
     async (data: Partial<SignUpInput>) => {
